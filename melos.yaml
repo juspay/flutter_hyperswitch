@@ -1,0 +1,21 @@
+name: flutter_hyperswitch_libraries
+
+packages:
+  - packages/*
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  analyze:
+    run: melos exec -- dart analyze .
+    description: Run analysis for all packages
+    
+  test:
+    run: melos exec -- flutter test
+    description: Run tests for all packages
+    
+  format:
+    run: melos exec -- dart format .
+    description: Format all packages
