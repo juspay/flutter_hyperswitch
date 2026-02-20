@@ -1,3 +1,7 @@
+## 1.5.1
+
+* Fixed crashes.
+
 ## 1.5.0
 
 - Optional feature control.

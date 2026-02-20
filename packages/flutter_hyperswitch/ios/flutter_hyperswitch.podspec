@@ -15,7 +15,7 @@ A new Flutter plugin project.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.dependency 'hyperswitch-sdk-ios/sentry', '= 0.4.0'
+  s.dependency 'hyperswitch-sdk-ios/sentry', '= 0.4.3'
   s.platform = :ios, '15.1'
 
   # Flutter.framework does not contain a i386 slice.

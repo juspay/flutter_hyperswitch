@@ -1,6 +1,6 @@
 name: flutter_hyperswitch_scancard
 description: "Flutter Hyperswitch: Simplifying payment integration for Flutter apps with seamless API interactions and customizable UI."
-version: 1.0.0
+version: 1.0.1
 homepage: "https://hyperswitch.io"
 
 environment:
