@@ -256,30 +256,129 @@ Theme stringToTheme(String theme) {
   }
 }
 
-/// Enum representing different layouts.
-enum Layout { tabs, accordion, spacedAccordion }
+/// Enum representing different layout types.
+enum LayoutType { tabs, accordion }
 
-/// Function to convert Layout enum to corresponding string values.
-String layoutToString(Layout? theme) {
-  switch (theme) {
-    case Layout.accordion:
+/// Function to convert LayoutType enum to corresponding string values.
+String layoutTypeToString(LayoutType? type) {
+  switch (type) {
+    case LayoutType.accordion:
       return "accordion";
-    case Layout.spacedAccordion:
-      return "spacedAccordion";
     default:
       return "tabs";
   }
 }
 
-/// Function to convert string values to corresponding Layout enum .
-Layout stringToLayout(String theme) {
-  switch (theme) {
+/// Function to convert string values to corresponding LayoutType enum.
+LayoutType stringToLayoutType(String type) {
+  switch (type) {
     case "accordion":
-      return Layout.accordion;
-    case "spacedAccordion":
-      return Layout.spacedAccordion;
+    case "spacedAccordion": // Backward compatibility
+      return LayoutType.accordion;
     default:
-      return Layout.tabs;
+      return LayoutType.tabs;
+  }
+}
+
+/// Enum representing payment methods arrangement.
+enum PaymentMethodsArrangement { defaultArrangement, grid }
+
+/// Function to convert PaymentMethodsArrangement enum to string.
+String paymentMethodsArrangementToString(PaymentMethodsArrangement? arrangement) {
+  switch (arrangement) {
+    case PaymentMethodsArrangement.grid:
+      return "grid";
+    default:
+      return "default";
+  }
+}
+
+/// Enum representing grouping behavior for saved methods.
+enum GroupingBehavior { defaultBehavior, groupByPaymentMethods }
+
+/// Function to convert GroupingBehavior enum to string.
+String groupingBehaviorToString(GroupingBehavior? behavior) {
+  switch (behavior) {
+    case GroupingBehavior.groupByPaymentMethods:
+      return "groupByPaymentMethods";
+    default:
+      return "default";
+  }
+}
+
+/// A class representing saved method customization options.
+class SavedMethodCustomization {
+  GroupingBehavior? groupingBehavior;
+
+  SavedMethodCustomization({this.groupingBehavior});
+
+  factory SavedMethodCustomization.fromJson(Map<String, dynamic> json) {
+    return SavedMethodCustomization(
+      groupingBehavior: json['groupingBehavior'] == 'groupByPaymentMethods'
+          ? GroupingBehavior.groupByPaymentMethods
+          : GroupingBehavior.defaultBehavior,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'groupingBehavior': groupingBehaviorToString(groupingBehavior),
+    };
+  }
+}
+
+/// A class representing layout configuration.
+class LayoutConfig {
+  LayoutType? type;
+  bool? showOneClickWalletsOnTop;
+  PaymentMethodsArrangement? paymentMethodsArrangementForTabs;
+  bool? defaultCollapsed;
+  bool? radios;
+  bool? spacedAccordionItems;
+  int? maxAccordionItems;
+  SavedMethodCustomization? savedMethodCustomization;
+
+  LayoutConfig({
+    this.type,
+    this.showOneClickWalletsOnTop,
+    this.paymentMethodsArrangementForTabs,
+    this.defaultCollapsed,
+    this.radios,
+    this.spacedAccordionItems,
+    this.maxAccordionItems,
+    this.savedMethodCustomization,
+  });
+
+  factory LayoutConfig.fromJson(Map<String, dynamic> json) {
+    return LayoutConfig(
+      type: stringToLayoutType(json['type'] ?? 'tabs'),
+      showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'],
+      paymentMethodsArrangementForTabs:
+          json['paymentMethodsArrangementForTabs'] == 'grid'
+              ? PaymentMethodsArrangement.grid
+              : PaymentMethodsArrangement.defaultArrangement,
+      defaultCollapsed: json['defaultCollapsed'],
+      radios: json['radios'],
+      spacedAccordionItems: json['spacedAccordionItems'],
+      maxAccordionItems: json['maxAccordionItems'],
+      savedMethodCustomization: json['savedMethodCustomization'] != null
+          ? SavedMethodCustomization.fromJson(json['savedMethodCustomization'])
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': layoutTypeToString(type),
+      'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
+      'paymentMethodsArrangementForTabs':
+          paymentMethodsArrangementToString(paymentMethodsArrangementForTabs),
+      'defaultCollapsed': defaultCollapsed,
+      'radios': radios,
+      'spacedAccordionItems': spacedAccordionItems,
+      'maxAccordionItems': maxAccordionItems,
+      'savedMethodCustomization': savedMethodCustomization?.toJson(),
+    };
   }
 }
 
@@ -296,7 +395,7 @@ class Appearance {
     GPayParams? googlePay,
     ApplePayParams? applePay,
     Theme? theme,
-    Layout? layout,
+    LayoutConfig? layout,
   }) {
     themeData = {
       'colors': colors?.toJson(),
@@ -307,7 +406,7 @@ class Appearance {
       'applePay': applePay?.toJson(),
       'googlePay': googlePay?.toJson(),
       'theme': themeToString(theme),
-      'layout': layoutToString(layout),
+      'layout': layout?.toJson(),
     };
   }
 
@@ -321,7 +420,7 @@ class Appearance {
       applePay: ApplePayParams.fromJson(json['applePay']),
       googlePay: GPayParams.fromJson(json['googlePay']),
       theme: stringToTheme(json['theme']),
-      layout: stringToLayout(json['layout']),
+      layout: json['layout'] != null ? LayoutConfig.fromJson(json['layout']) : null,
     );
   }
 
