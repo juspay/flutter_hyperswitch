@@ -3,11 +3,13 @@ import 'dart:ffi';
 /// A class representing parameters for the Hyperswitch configuration.
 class HyperConfig {
   String publishableKey;
+  String profileId;
   String? customBackendUrl;
   String? customLogUrl;
 
   HyperConfig({
     required this.publishableKey,
+    required this.profileId,
     this.customBackendUrl,
     this.customLogUrl,
   });
@@ -15,6 +17,7 @@ class HyperConfig {
   Map<String, dynamic> toJson() {
     return {
       'publishableKey': publishableKey,
+      'profileId': profileId,
       'customBackendUrl': customBackendUrl,
       'customLogUrl': customLogUrl,
     };

@@ -83,12 +83,13 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
         case "init":
             if let params = call.arguments as? [String: Any] {
                 if let argumentValue = params["params"] as? [String: Any] {
-                    if let publishableKey = argumentValue["publishableKey"] as? String {
+                    if let publishableKey = argumentValue["publishableKey"] as? String,
+                       let profileId = argumentValue["profileId"] as? String {
                         let customBackendUrl = argumentValue["customBackendUrl"] as? String
                         let customLogUrl = argumentValue["customLogUrl"] as? String
                         let customParams = argumentValue["customParams"] as? [String:Any]
                         self.params.merge(argumentValue, uniquingKeysWith: {_, new in new})
-                        paymentSession = PaymentSession(publishableKey: publishableKey, customBackendUrl: customBackendUrl, customParams: customParams, customLogUrl: customLogUrl)
+                        paymentSession = PaymentSession(publishableKey: publishableKey, profileId: profileId, customBackendUrl: customBackendUrl, customParams: customParams, customLogUrl: customLogUrl)
                     }
                 }
             }

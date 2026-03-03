@@ -96,13 +96,14 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     params.putAll(it)
                 }
                 val publishableKey = params["publishableKey"] as String? ?: ""
+                val profileId = params["profileId"] as String? ?: ""
                 val customBackendUrl = params["customBackendUrl"] as String? ?: ""
                 val customLogUrl = params["customLogUrl"] as String? ?: ""
                 val customParams = LaunchOptions(
                     activity, BuildConfig.VERSION_NAME
                 ).toBundle(params["customParams"] as HashMap<*, *>? ?: mapOf<String, Any?>())
                 paymentSession = PaymentSession(
-                    activity, publishableKey, customBackendUrl, customLogUrl, customParams
+                    activity, publishableKey, profileId, customBackendUrl, customLogUrl, customParams
                 )
             }
 
@@ -235,7 +236,8 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
             "presentPaymentSheet" -> {
                 val pk = params["publishableKey"]
-                if (pk == null) {
+                val profileId = params["profileId"]
+                if (pk == null || profileId == null) {
                     val map = HashMap<String, Any>()
                     map["type"] = "failed"
                     map["message"] = "Payment Sheet Initialisation Failed"
