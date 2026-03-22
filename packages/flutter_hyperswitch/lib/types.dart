@@ -256,30 +256,6 @@ Theme stringToTheme(String theme) {
   }
 }
 
-/// Enum representing different layout types.
-enum LayoutType { tabs, accordion }
-
-/// Function to convert LayoutType enum to corresponding string values.
-String layoutTypeToString(LayoutType? type) {
-  switch (type) {
-    case LayoutType.accordion:
-      return "accordion";
-    default:
-      return "tabs";
-  }
-}
-
-/// Function to convert string values to corresponding LayoutType enum.
-LayoutType stringToLayoutType(String type) {
-  switch (type) {
-    case "accordion":
-    case "spacedAccordion": // Backward compatibility
-      return LayoutType.accordion;
-    default:
-      return LayoutType.tabs;
-  }
-}
-
 /// Enum representing payment methods arrangement.
 enum PaymentMethodsArrangement { defaultArrangement, grid }
 
@@ -327,52 +303,101 @@ class SavedMethodCustomization {
   }
 }
 
-/// A class representing layout configuration.
-class LayoutConfig {
-  LayoutType? type;
-  bool? showOneClickWalletsOnTop;
-  PaymentMethodsArrangement? paymentMethodsArrangementForTabs;
-  bool? defaultCollapsed;
-  bool? radios;
-  bool? spacedAccordionItems;
-  int? maxAccordionItems;
-  SavedMethodCustomization? savedMethodCustomization;
+sealed class Layout {
+  Map<String, dynamic> toJson();
 
-  LayoutConfig({
-    this.type,
-    this.showOneClickWalletsOnTop,
-    this.paymentMethodsArrangementForTabs,
-    this.defaultCollapsed,
-    this.radios,
-    this.spacedAccordionItems,
-    this.maxAccordionItems,
+  static TabsLayout get tabs => TabsLayout();
+
+  static AccordionLayout get accordion => AccordionLayout();
+
+  static AccordionLayout get spacedAccordion =>
+      AccordionLayout(spacedAccordionItems: true);
+
+  static Layout fromJson(Map<String, dynamic> json) {
+    final type = json['type'] ?? 'tabs';
+    if (type == 'accordion') {
+      return AccordionLayout(
+        showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'] ?? true,
+        defaultCollapsed: json['defaultCollapsed'] ?? false,
+        radios: json['radios'] ?? false,
+        spacedAccordionItems: json['spacedAccordionItems'] ?? false,
+        maxAccordionItems: json['maxAccordionItems'] ?? 4,
+        savedMethodCustomization: json['savedMethodCustomization'] != null
+            ? SavedMethodCustomization.fromJson(
+                json['savedMethodCustomization'],
+              )
+            : null,
+      );
+    } else {
+      return TabsLayout(
+        showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'] ?? true,
+        paymentMethodsArrangement:
+            json['paymentMethodsArrangementForTabs'] == 'grid'
+                ? PaymentMethodsArrangement.grid
+                : PaymentMethodsArrangement.defaultArrangement,
+        savedMethodCustomization: json['savedMethodCustomization'] != null
+            ? SavedMethodCustomization.fromJson(
+                json['savedMethodCustomization'],
+              )
+            : null,
+      );
+    }
+  }
+}
+
+class TabsLayout extends Layout {
+  final bool showOneClickWalletsOnTop;
+  final PaymentMethodsArrangement paymentMethodsArrangement;
+  final SavedMethodCustomization? savedMethodCustomization;
+
+  TabsLayout({
+    this.showOneClickWalletsOnTop = true,
+    this.paymentMethodsArrangement =
+        PaymentMethodsArrangement.defaultArrangement,
     this.savedMethodCustomization,
   });
 
-  factory LayoutConfig.fromJson(Map<String, dynamic> json) {
-    return LayoutConfig(
-      type: stringToLayoutType(json['type'] ?? 'tabs'),
-      showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'],
-      paymentMethodsArrangementForTabs:
-          json['paymentMethodsArrangementForTabs'] == 'grid'
-              ? PaymentMethodsArrangement.grid
-              : PaymentMethodsArrangement.defaultArrangement,
-      defaultCollapsed: json['defaultCollapsed'],
-      radios: json['radios'],
-      spacedAccordionItems: json['spacedAccordionItems'],
-      maxAccordionItems: json['maxAccordionItems'],
-      savedMethodCustomization: json['savedMethodCustomization'] != null
-          ? SavedMethodCustomization.fromJson(json['savedMethodCustomization'])
-          : null,
-    );
-  }
-
+  @override
   Map<String, dynamic> toJson() {
     return {
-      'type': layoutTypeToString(type),
+      'type': 'tabs',
       'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
-      'paymentMethodsArrangementForTabs':
-          paymentMethodsArrangementToString(paymentMethodsArrangementForTabs),
+      'paymentMethodsArrangementForTabs': paymentMethodsArrangementToString(
+        paymentMethodsArrangement,
+      ),
+      'defaultCollapsed': false,
+      'radios': false,
+      'spacedAccordionItems': false,
+      'savedMethodCustomization': savedMethodCustomization?.toJson(),
+    };
+  }
+}
+
+class AccordionLayout extends Layout {
+  final bool showOneClickWalletsOnTop;
+  final bool defaultCollapsed;
+  final bool radios;
+  final bool spacedAccordionItems;
+  final int maxAccordionItems;
+  final SavedMethodCustomization? savedMethodCustomization;
+
+  AccordionLayout({
+    this.showOneClickWalletsOnTop = true,
+    this.defaultCollapsed = false,
+    this.radios = false,
+    this.spacedAccordionItems = false,
+    this.maxAccordionItems = 4,
+    this.savedMethodCustomization,
+  });
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': 'accordion',
+      'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
+      'paymentMethodsArrangementForTabs': paymentMethodsArrangementToString(
+        PaymentMethodsArrangement.defaultArrangement,
+      ),
       'defaultCollapsed': defaultCollapsed,
       'radios': radios,
       'spacedAccordionItems': spacedAccordionItems,
@@ -395,7 +420,7 @@ class Appearance {
     GPayParams? googlePay,
     ApplePayParams? applePay,
     Theme? theme,
-    LayoutConfig? layout,
+    Layout? layout,
   }) {
     themeData = {
       'colors': colors?.toJson(),
@@ -420,7 +445,7 @@ class Appearance {
       applePay: ApplePayParams.fromJson(json['applePay']),
       googlePay: GPayParams.fromJson(json['googlePay']),
       theme: stringToTheme(json['theme']),
-      layout: json['layout'] != null ? LayoutConfig.fromJson(json['layout']) : null,
+      layout: json['layout'] != null ? Layout.fromJson(json['layout']) : null,
     );
   }
 
