@@ -256,30 +256,154 @@ Theme stringToTheme(String theme) {
   }
 }
 
-/// Enum representing different layouts.
-enum Layout { tabs, accordion, spacedAccordion }
+/// Enum representing payment methods arrangement.
+enum PaymentMethodsArrangement { defaultArrangement, grid }
 
-/// Function to convert Layout enum to corresponding string values.
-String layoutToString(Layout? theme) {
-  switch (theme) {
-    case Layout.accordion:
-      return "accordion";
-    case Layout.spacedAccordion:
-      return "spacedAccordion";
+/// Function to convert PaymentMethodsArrangement enum to string.
+String paymentMethodsArrangementToString(PaymentMethodsArrangement? arrangement) {
+  switch (arrangement) {
+    case PaymentMethodsArrangement.grid:
+      return "grid";
     default:
-      return "tabs";
+      return "default";
   }
 }
 
-/// Function to convert string values to corresponding Layout enum .
-Layout stringToLayout(String theme) {
-  switch (theme) {
-    case "accordion":
-      return Layout.accordion;
-    case "spacedAccordion":
-      return Layout.spacedAccordion;
+/// Enum representing grouping behavior for saved methods.
+enum GroupingBehavior { defaultBehavior, groupByPaymentMethods }
+
+/// Function to convert GroupingBehavior enum to string.
+String groupingBehaviorToString(GroupingBehavior? behavior) {
+  switch (behavior) {
+    case GroupingBehavior.groupByPaymentMethods:
+      return "groupByPaymentMethods";
     default:
-      return Layout.tabs;
+      return "default";
+  }
+}
+
+/// A class representing saved method customization options.
+class SavedMethodCustomization {
+  GroupingBehavior? groupingBehavior;
+
+  SavedMethodCustomization({this.groupingBehavior});
+
+  factory SavedMethodCustomization.fromJson(Map<String, dynamic> json) {
+    return SavedMethodCustomization(
+      groupingBehavior: json['groupingBehavior'] == 'groupByPaymentMethods'
+          ? GroupingBehavior.groupByPaymentMethods
+          : GroupingBehavior.defaultBehavior,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'groupingBehavior': groupingBehaviorToString(groupingBehavior),
+    };
+  }
+}
+
+sealed class Layout {
+  Map<String, dynamic> toJson();
+
+  static TabsLayout get tabs => TabsLayout();
+
+  static AccordionLayout get accordion => AccordionLayout();
+
+  static AccordionLayout get spacedAccordion =>
+      AccordionLayout(spacedAccordionItems: true);
+
+  static Layout fromJson(Map<String, dynamic> json) {
+    final type = json['type'] ?? 'tabs';
+    if (type == 'accordion') {
+      return AccordionLayout(
+        showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'] ?? true,
+        defaultCollapsed: json['defaultCollapsed'] ?? false,
+        radios: json['radios'] ?? false,
+        spacedAccordionItems: json['spacedAccordionItems'] ?? false,
+        maxAccordionItems: json['maxAccordionItems'] ?? 4,
+        savedMethodCustomization: json['savedMethodCustomization'] != null
+            ? SavedMethodCustomization.fromJson(
+                json['savedMethodCustomization'],
+              )
+            : null,
+      );
+    } else {
+      return TabsLayout(
+        showOneClickWalletsOnTop: json['showOneClickWalletsOnTop'] ?? true,
+        paymentMethodsArrangement:
+            json['paymentMethodsArrangementForTabs'] == 'grid'
+                ? PaymentMethodsArrangement.grid
+                : PaymentMethodsArrangement.defaultArrangement,
+        savedMethodCustomization: json['savedMethodCustomization'] != null
+            ? SavedMethodCustomization.fromJson(
+                json['savedMethodCustomization'],
+              )
+            : null,
+      );
+    }
+  }
+}
+
+class TabsLayout extends Layout {
+  final bool showOneClickWalletsOnTop;
+  final PaymentMethodsArrangement paymentMethodsArrangement;
+  final SavedMethodCustomization? savedMethodCustomization;
+
+  TabsLayout({
+    this.showOneClickWalletsOnTop = true,
+    this.paymentMethodsArrangement =
+        PaymentMethodsArrangement.defaultArrangement,
+    this.savedMethodCustomization,
+  });
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': 'tabs',
+      'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
+      'paymentMethodsArrangementForTabs': paymentMethodsArrangementToString(
+        paymentMethodsArrangement,
+      ),
+      'defaultCollapsed': false,
+      'radios': false,
+      'spacedAccordionItems': false,
+      'savedMethodCustomization': savedMethodCustomization?.toJson(),
+    };
+  }
+}
+
+class AccordionLayout extends Layout {
+  final bool showOneClickWalletsOnTop;
+  final bool defaultCollapsed;
+  final bool radios;
+  final bool spacedAccordionItems;
+  final int maxAccordionItems;
+  final SavedMethodCustomization? savedMethodCustomization;
+
+  AccordionLayout({
+    this.showOneClickWalletsOnTop = true,
+    this.defaultCollapsed = false,
+    this.radios = false,
+    this.spacedAccordionItems = false,
+    this.maxAccordionItems = 4,
+    this.savedMethodCustomization,
+  });
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': 'accordion',
+      'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
+      'paymentMethodsArrangementForTabs': paymentMethodsArrangementToString(
+        PaymentMethodsArrangement.defaultArrangement,
+      ),
+      'defaultCollapsed': defaultCollapsed,
+      'radios': radios,
+      'spacedAccordionItems': spacedAccordionItems,
+      'maxAccordionItems': maxAccordionItems,
+      'savedMethodCustomization': savedMethodCustomization?.toJson(),
+    };
   }
 }
 
@@ -307,7 +431,7 @@ class Appearance {
       'applePay': applePay?.toJson(),
       'googlePay': googlePay?.toJson(),
       'theme': themeToString(theme),
-      'layout': layoutToString(layout),
+      'layout': layout?.toJson(),
     };
   }
 
@@ -321,7 +445,7 @@ class Appearance {
       applePay: ApplePayParams.fromJson(json['applePay']),
       googlePay: GPayParams.fromJson(json['googlePay']),
       theme: stringToTheme(json['theme']),
-      layout: stringToLayout(json['layout']),
+      layout: json['layout'] != null ? Layout.fromJson(json['layout']) : null,
     );
   }
 

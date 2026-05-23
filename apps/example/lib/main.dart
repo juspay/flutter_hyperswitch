@@ -56,7 +56,12 @@ class _MyAppState extends State<MyApp> {
               savedPaymentSheetHeaderLabel: "Select payment method",
               primaryButtonLabel: "Purchase (\$2.00)",
               appearance: Appearance(
-                layout: Layout.spacedAccordion,
+                layout: AccordionLayout(
+                  maxAccordionItems: 3,
+                  spacedAccordionItems: true,
+                  showOneClickWalletsOnTop: false,
+                  radios: true
+                ),
                 googlePay: GPayParams(
                   buttonType: GPayButtonType.donate,
                   buttonStyle: GPayButtonStyle(
