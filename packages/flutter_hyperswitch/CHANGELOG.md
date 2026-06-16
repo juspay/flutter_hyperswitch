@@ -1,3 +1,7 @@
+## 1.5.2-patch.2
+
+* Patch for fixes.
+
 ## 1.5.2-patch.1
 
 * Patch for fixes.
