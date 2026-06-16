@@ -46,7 +46,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8"
+        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.1"
     }
 }
 
@@ -65,11 +65,11 @@ $content''';
         print('Added mavenCentral() to project-level build.gradle.');
       }
       if (!content.contains(
-        'classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8"',
+        'classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.1"',
       )) {
         content = content.replaceFirst(
           'dependencies {',
-          'dependencies {\n        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8"',
+          'dependencies {\n        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.1"',
         );
         print('Updated project-level build.gradle with Hyperswitch classpath.');
       } else {
