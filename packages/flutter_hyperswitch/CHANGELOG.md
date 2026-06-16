@@ -1,3 +1,7 @@
+## 1.5.2
+
+* disableBranding prop fix.
+
 ## 1.5.1
 
 * Fixed crashes.

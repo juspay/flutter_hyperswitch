@@ -26,13 +26,11 @@ class PaymentMethodParams {
   String clientSecret;
   Configuration? configuration;
   Map<String, dynamic>? customParams;
-  HyperParams? hyperParams;
 
   PaymentMethodParams({
     required this.clientSecret,
     this.configuration,
     this.customParams,
-    this.hyperParams,
   });
 
   Map<String, dynamic> toJson() {
@@ -40,7 +38,6 @@ class PaymentMethodParams {
       'clientSecret': clientSecret,
       'configuration': configuration?.toJson(),
       'customParams': customParams,
-      'hyperParams': hyperParams?.toJson(),
     };
   }
 }
@@ -62,6 +59,8 @@ class Configuration {
   String? savedPaymentSheetHeaderLabel;
   bool? displayDefaultSavedPaymentIcon;
   String? netceteraSDKApiKey;
+  bool? disableBranding;
+  bool? defaultView;
 
   Configuration({
     this.appearance,
@@ -79,6 +78,8 @@ class Configuration {
     this.savedPaymentSheetHeaderLabel,
     this.displayDefaultSavedPaymentIcon,
     this.netceteraSDKApiKey,
+    this.disableBranding,
+    this.defaultView,
   });
 
   Map<String, dynamic> toJson() {
@@ -99,6 +100,8 @@ class Configuration {
       'savedPaymentSheetHeaderLabel': savedPaymentSheetHeaderLabel,
       'displayDefaultSavedPaymentIcon': displayDefaultSavedPaymentIcon,
       'netceteraSDKApiKey': netceteraSDKApiKey,
+      'disableBranding': disableBranding,
+      'defaultView': defaultView,
     };
   }
 }
@@ -547,25 +550,6 @@ class Customer {
 
   Map<String, dynamic> toJson() {
     return {'ephemeralKeySecret': ephemeralKeySecret, 'id': id};
-  }
-}
-
-/// A class representing hyper parameters.
-class HyperParams {
-  bool? disableBranding;
-  bool? defaultView;
-
-  HyperParams({this.disableBranding, this.defaultView});
-
-  factory HyperParams.fromJson(Map<String, dynamic> json) {
-    return HyperParams(
-      disableBranding: json['disableBranding'] ?? false,
-      defaultView: json['defaultView'] ?? false,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {'disableBranding': disableBranding, 'defaultView': defaultView};
   }
 }
 
