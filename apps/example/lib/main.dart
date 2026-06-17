@@ -45,7 +45,12 @@ class _MyAppState extends State<MyApp> {
     );
     if (response.statusCode == 200) {
       final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
-      _hyper.init(HyperConfig(publishableKey: responseBody['publishableKey']));
+      _hyper.init(
+        HyperConfig(
+          publishableKey: responseBody['publishableKey'],
+          profileId: responseBody['profileId'],
+        ),
+      );
       try {
         _sessionId = await _hyper.initPaymentSession(
           PaymentMethodParams(
