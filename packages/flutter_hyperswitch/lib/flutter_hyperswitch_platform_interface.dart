@@ -43,7 +43,9 @@ abstract class FlutterHyperswitchPlatform extends PlatformInterface {
   /// Presents the payment sheet.
   ///
   /// Throws an [UnimplementedError] if the method is not implemented.
-  Future<Map<String, dynamic>?> presentPaymentSheet() {
+  Future<Map<String, dynamic>?> presentPaymentSheet(
+    Map<String, dynamic> params,
+  ) {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 

@@ -3,11 +3,17 @@ import 'dart:ffi';
 /// A class representing parameters for the Hyperswitch configuration.
 class HyperConfig {
   String publishableKey;
+  String? profileId;
+  HyperswitchEnvironment? environment;
+  CustomEndpointConfiguration? customConfig;
   String? customBackendUrl;
   String? customLogUrl;
 
   HyperConfig({
     required this.publishableKey,
+    this.profileId,
+    this.environment,
+    this.customConfig,
     this.customBackendUrl,
     this.customLogUrl,
   });
@@ -15,27 +21,116 @@ class HyperConfig {
   Map<String, dynamic> toJson() {
     return {
       'publishableKey': publishableKey,
+      'profileId': profileId,
+      'environment': environmentToString(environment),
+      'customEndpoints': customConfig?.toJson(),
       'customBackendUrl': customBackendUrl,
       'customLogUrl': customLogUrl,
     };
   }
 }
 
-/// A class representing parameters for payment method initialization.
-class PaymentMethodParams {
-  String clientSecret;
+/// Enum representing Hyperswitch environments.
+enum HyperswitchEnvironment { production, sandbox, integ }
+
+String environmentToString(HyperswitchEnvironment? environment) {
+  switch (environment) {
+    case HyperswitchEnvironment.sandbox:
+      return "SANDBOX";
+    case HyperswitchEnvironment.integ:
+      return "INTEG";
+    case HyperswitchEnvironment.production:
+    case null:
+      return "PROD";
+  }
+}
+
+/// A class representing custom endpoint overrides for Hyperswitch.
+class OverrideEndpoints {
+  String? customBackendEndpoint;
+  String? customLoggingEndpoint;
+  String? customAssetEndpoint;
+  String? customSDKConfigEndpoint;
+  String? customConfirmEndpoint;
+  String? customAirborneEndpoint;
+
+  OverrideEndpoints({
+    this.customBackendEndpoint,
+    this.customLoggingEndpoint,
+    this.customAssetEndpoint,
+    this.customSDKConfigEndpoint,
+    this.customConfirmEndpoint,
+    this.customAirborneEndpoint,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'customBackendEndpoint': customBackendEndpoint,
+      'customLoggingEndpoint': customLoggingEndpoint,
+      'customAssetEndpoint': customAssetEndpoint,
+      'customSDKConfigEndpoint': customSDKConfigEndpoint,
+      'customConfirmEndpoint': customConfirmEndpoint,
+      'customAirborneEndpoint': customAirborneEndpoint,
+    };
+  }
+}
+
+/// A class representing custom endpoint configuration for Hyperswitch.
+class CustomEndpointConfiguration {
+  OverrideEndpoints? overrideEndpoints;
+  String? commonEndpoint;
+
+  CustomEndpointConfiguration({this.overrideEndpoints, this.commonEndpoint});
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overrideEndpoints': overrideEndpoints?.toJson(),
+      'commonEndpoint': commonEndpoint,
+    };
+  }
+}
+
+/// A class representing payment session initialization options.
+class PaymentSessionConfiguration {
+  String sdkAuthorization;
+
+  /// Deprecated: pass this to `presentPaymentSheet(session, configuration)`
+  /// instead. Kept so existing Flutter merchants do not break.
   Configuration? configuration;
   Map<String, dynamic>? customParams;
 
-  PaymentMethodParams({
-    required this.clientSecret,
+  PaymentSessionConfiguration({
+    required this.sdkAuthorization,
     this.configuration,
     this.customParams,
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'clientSecret': clientSecret,
+      'sdkAuthorization': sdkAuthorization,
+      'configuration': configuration?.toJson(),
+      'customParams': customParams,
+    };
+  }
+}
+
+/// Backward-compatible alias for older Flutter SDK integrations.
+///
+/// Prefer [PaymentSessionConfiguration] with `sdkAuthorization` for new code.
+class PaymentMethodParams extends PaymentSessionConfiguration {
+  PaymentMethodParams({
+    required String clientSecret,
+    super.configuration,
+    super.customParams,
+  }) : super(sdkAuthorization: clientSecret);
+
+  String get clientSecret => sdkAuthorization;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'sdkAuthorization': sdkAuthorization,
+      'clientSecret': sdkAuthorization,
       'configuration': configuration?.toJson(),
       'customParams': customParams,
     };
@@ -884,28 +979,34 @@ class PaymentMethod extends PaymentMethodResponse {
 
   factory PaymentMethod.fromMap(Map<String, dynamic> map) {
     return PaymentMethod(
-      paymentToken: map['payment_token'] as String,
-      paymentMethodId: map['payment_method_id'] as String,
-      customerId: map['customer_id'] as String,
+      paymentToken: map['payment_token'] as String? ?? '',
+      paymentMethodId: map['payment_method_id'] as String? ?? '',
+      customerId: map['customer_id'] as String? ?? '',
       paymentMethod: PaymentMethodType.fromString(
-        map['payment_method_str'] as String? ?? map['payment_method'] as String,
+        map['payment_method_str'] as String? ??
+            map['payment_method'] as String? ??
+            'unknown',
       ),
-      paymentMethodType: map['payment_method_type'] as String,
-      paymentMethodIssuer: map['payment_method_issuer'] as String,
+      paymentMethodType: map['payment_method_type'] as String? ?? '',
+      paymentMethodIssuer: map['payment_method_issuer'] as String? ?? '',
       paymentMethodIssuerCode: map['payment_method_issuer_code'] as String?,
-      recurringEnabled: map['recurring_enabled'] as bool,
-      installmentPaymentEnabled: map['installment_payment_enabled'] as bool,
-      paymentExperience: List<String>.from(map['payment_experience'] as List),
+      recurringEnabled: map['recurring_enabled'] as bool? ?? false,
+      installmentPaymentEnabled:
+          map['installment_payment_enabled'] as bool? ?? false,
+      paymentExperience: List<String>.from(
+        map['payment_experience'] as List? ?? const [],
+      ),
       card: map['card'] != null
           ? Card.fromMap(Map<String, dynamic>.from(map['card'] as Map))
           : null,
       metadata: map['metadata'] as String?,
-      created: map['created'] as String,
+      created: map['created'] as String? ?? '',
       bank: map['bank'] as String?,
       surchargeDetails: map['surcharge_details'] as String?,
-      requiresCvv: map['requires_cvv'] as bool,
-      lastUsedAt: map['last_used_at'] as String,
-      defaultPaymentMethodSet: map['default_payment_method_set'] as bool,
+      requiresCvv: map['requires_cvv'] as bool? ?? false,
+      lastUsedAt: map['last_used_at'] as String? ?? '',
+      defaultPaymentMethodSet:
+          map['default_payment_method_set'] as bool? ?? false,
     );
   }
 
@@ -1034,8 +1135,11 @@ class PaymentResult {
   factory PaymentResult.fromMap(Map<String, dynamic> map) {
     return PaymentResult(
       status: _getStatusFromString(map['type'] ?? ''),
-      message: _getMessageFromString(map['message'] ?? ''),
-      error: _getErrorFromString(map['type'] ?? '', map['message'] ?? ''),
+      message: _getMessageFromString(map['message']?.toString() ?? ''),
+      error: _getErrorFromString(
+        map['type']?.toString() ?? '',
+        map['message']?.toString() ?? '',
+      ),
     );
   }
 
@@ -1045,6 +1149,7 @@ class PaymentResult {
       case 'completed':
         return Status.completed;
       case 'cancelled':
+      case 'canceled':
         return Status.cancelled;
       default:
         return Status.failed;
@@ -1059,6 +1164,7 @@ class PaymentResult {
       case 'failed':
         return Result.failed;
       case 'cancelled':
+      case 'canceled':
         return Result.cancelled;
       case 'processing':
         return Result.processing;

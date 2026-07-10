@@ -40,55 +40,34 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _initPlatformState() async {
-    final response = await http.get(
-      Uri.parse("$_endpoint/create-payment-intent"),
-    );
+    late final http.Response response;
+    try {
+      response = await http.get(Uri.parse("$_endpoint/create-payment-intent"));
+    } catch (error) {
+      setState(() {
+        _statusText = "API Call Failed";
+      });
+      return;
+    }
+
     if (response.statusCode == 200) {
       final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
-      _hyper.init(HyperConfig(publishableKey: responseBody['publishableKey']));
+      _hyper.init(
+        HyperConfig(
+          publishableKey: responseBody['publishableKey'],
+          profileId: responseBody['profileId'] as String?,
+        ),
+      );
       try {
+        final sdkAuthorization =
+            (responseBody['sdkAuthorization'] ?? responseBody['clientSecret'])
+                as String;
         _sessionId = await _hyper.initPaymentSession(
-          PaymentMethodParams(
-            clientSecret: responseBody['clientSecret'],
-            configuration: Configuration(
-              displayDefaultSavedPaymentIcon: false,
-              paymentSheetHeaderLabel: "Payment methods",
-              savedPaymentSheetHeaderLabel: "Select payment method",
-              primaryButtonLabel: "Purchase (\$2.00)",
-              appearance: Appearance(
-                layout: Layout.tabs,
-                googlePay: GPayParams(
-                  buttonType: GPayButtonType.donate,
-                  buttonStyle: GPayButtonStyle(
-                    light: GPayButtonStyleType.light,
-                    dark: GPayButtonStyleType.light,
-                  ),
-                ),
-                applePay: ApplePayParams(
-                  buttonType: ApplePayButtonType.donate,
-                  buttonStyle: ApplePayButtonStyle(
-                    light: ApplePayButtonStyleType.whiteOutline,
-                    dark: ApplePayButtonStyleType.whiteOutline,
-                  ),
-                ),
-                font: Font(family: "Montserrat"),
-                colors: DynamicColors(
-                  dark: ColorsObject(primary: "#8DBD00", background: "#F5F8F9"),
-                  light: ColorsObject(
-                    primary: "#8DBD00",
-                    background: "#F5F8F9",
-                  ),
-                ),
-                primaryButton: PrimaryButton(
-                  shapes: Shapes(borderRadius: 32.0),
-                ),
-              ),
-            ),
-          ),
+          PaymentSessionConfiguration(sdkAuthorization: sdkAuthorization),
         );
-      } catch (ex) {
+      } catch (error) {
         setState(() {
-          _statusText = (ex as HyperswitchException).message;
+          _statusText = _errorMessage(error);
         });
       }
       setState(() {
@@ -102,6 +81,52 @@ class _MyAppState extends State<MyApp> {
         _statusText = "API Call Failed";
       });
     }
+  }
+
+  Future<void> _reloadClientSecret() async {
+    setState(() {
+      _isInitialized = false;
+      _sessionId = null;
+      _savedSessionId = null;
+      _showChangeButton = false;
+      _confirmState = 0;
+      _statusText = '';
+      _defaultPaymentMethodText = '';
+      _confirmStatusText = '';
+    });
+    await _initPlatformState();
+  }
+
+  Configuration _buildPaymentSheetConfiguration() {
+    return Configuration(
+      displayDefaultSavedPaymentIcon: false,
+      paymentSheetHeaderLabel: "Payment methods",
+      savedPaymentSheetHeaderLabel: "Select payment method",
+      primaryButtonLabel: "Purchase (\$2.00)",
+      appearance: Appearance(
+        layout: Layout.tabs,
+        googlePay: GPayParams(
+          buttonType: GPayButtonType.donate,
+          buttonStyle: GPayButtonStyle(
+            light: GPayButtonStyleType.light,
+            dark: GPayButtonStyleType.light,
+          ),
+        ),
+        applePay: ApplePayParams(
+          buttonType: ApplePayButtonType.donate,
+          buttonStyle: ApplePayButtonStyle(
+            light: ApplePayButtonStyleType.whiteOutline,
+            dark: ApplePayButtonStyleType.whiteOutline,
+          ),
+        ),
+        font: Font(family: "Montserrat"),
+        colors: DynamicColors(
+          dark: ColorsObject(primary: "#8DBD00", background: "#F5F8F9"),
+          light: ColorsObject(primary: "#8DBD00", background: "#F5F8F9"),
+        ),
+        primaryButton: PrimaryButton(shapes: Shapes(borderRadius: 32.0)),
+      ),
+    );
   }
 
   Future<void> _initializeHeadless() async {
@@ -188,6 +213,7 @@ class _MyAppState extends State<MyApp> {
     try {
       final presentPaymentSheetResponse = await _hyper.presentPaymentSheet(
         _sessionId!,
+        _buildPaymentSheetConfiguration(),
       );
       if (isHeadless) {
         _setConfirmStatusText(
@@ -231,9 +257,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _handleError(dynamic error, int flow) {
-    final errorMessage = error is HyperswitchException
-        ? error.message
-        : error.toString();
+    final errorMessage = _errorMessage(error);
     if (flow == 0) {
       _setStatusText(errorMessage);
     } else if (flow == 1) {
@@ -247,6 +271,10 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _statusText = text;
     });
+  }
+
+  String _errorMessage(Object error) {
+    return error is HyperswitchException ? error.message : error.toString();
   }
 
   void _setDefaultPaymentMethodText(String text, bool show) {
@@ -301,6 +329,12 @@ class _MyAppState extends State<MyApp> {
                   child: Text(
                     _isInitialized ? "Initialize Headless" : "Loading ...",
                   ),
+                ),
+              ),
+              Center(
+                child: OutlinedButton(
+                  onPressed: _reloadClientSecret,
+                  child: const Text("Reload Client Secret"),
                 ),
               ),
               Row(
@@ -361,6 +395,12 @@ class _MyAppState extends State<MyApp> {
                   child: Text(
                     _isInitialized ? "Open Payment Sheet" : "Loading ...",
                   ),
+                ),
+              ),
+              Center(
+                child: OutlinedButton(
+                  onPressed: _reloadClientSecret,
+                  child: const Text("Reload Client Secret"),
                 ),
               ),
               Center(child: Text(_statusText)),

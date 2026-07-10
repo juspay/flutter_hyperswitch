@@ -31,9 +31,12 @@ class MethodChannelFlutterHyperswitch extends FlutterHyperswitchPlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> presentPaymentSheet() async {
+  Future<Map<String, dynamic>?> presentPaymentSheet(
+    Map<String, dynamic> params,
+  ) async {
     final result = await methodChannel.invokeMethod<Map<dynamic, dynamic>>(
       'presentPaymentSheet',
+      {"params": params},
     );
     if (result != null) {
       final Map<String, dynamic> resultMap = Map<String, dynamic>.from(result);

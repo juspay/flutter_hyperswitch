@@ -11,10 +11,10 @@ class FlutterHyperswitch {
     FlutterHyperswitchPlatform.instance.init(config.toJson());
   }
 
-  /// Initializes the payment session with the provided [PaymentMethodParams].
+  /// Initializes the payment session with the provided [PaymentSessionConfiguration].
   ///
   /// Returns a `Future` that completes with the initialized session id.
-  Future<Session> initPaymentSession(PaymentMethodParams params) async {
+  Future<Session> initPaymentSession(PaymentSessionConfiguration params) async {
     try {
       final response = await FlutterHyperswitchPlatform.instance
           .initPaymentSession(params.toJson());
@@ -30,7 +30,7 @@ class FlutterHyperswitch {
         final message =
             response['message'] ?? "Payment Session Initialization Failed";
         if (type != "failed") {
-          _sessionMap[params.clientSecret] = Session(response['message']);
+          _sessionMap[params.sdkAuthorization] = Session(response['message']);
           return Session(response['message']);
         } else {
           return Future.error(
@@ -228,7 +228,10 @@ class FlutterHyperswitch {
   /// Presents the payment sheet.
   ///
   /// Returns a `Future` that completes with the result of presenting the payment sheet with the provided [Session].
-  Future<PaymentResult> presentPaymentSheet(Session session) async {
+  Future<PaymentResult> presentPaymentSheet(
+    Session session, [
+    Configuration? configuration,
+  ]) async {
     final sessionChecker = _sessionMap[session.sessionData];
     if (sessionChecker == null ||
         (sessionChecker is Session &&
@@ -238,8 +241,14 @@ class FlutterHyperswitch {
       );
     }
     try {
+      final params = <String, dynamic>{
+        if (configuration != null) 'configuration': configuration.toJson(),
+      };
       final response =
-          await FlutterHyperswitchPlatform.instance.presentPaymentSheet() ?? {};
+          await FlutterHyperswitchPlatform.instance.presentPaymentSheet(
+            params,
+          ) ??
+          {};
       return PaymentResult.fromMap(response);
     } catch (error) {
       return Future.error(
