@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.EventChannel
 import io.hyperswitch.model.CustomEndpointConfiguration
+import io.hyperswitch.model.ElementsUpdateResult
 import io.hyperswitch.model.HyperswitchConfiguration
 import io.hyperswitch.model.HyperswitchEnvironment
 import io.hyperswitch.model.OverrideEndpoints
@@ -40,6 +41,9 @@ import io.hyperswitch.utils.ConversionUtils
 import io.flutter.plugin.platform.PlatformViewRegistry
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 
 /** FlutterHyperswitchPlugin */
@@ -340,6 +344,61 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 }
             }
 
+            "updateElementsIntent" -> {
+                val currentElements = elements
+                if (currentElements == null) {
+                    val map = HashMap<String, Any>()
+                    map["type"] = "failed"
+                    map["message"] = "Elements not initialised"
+                    callBackHandler(result, map)
+                    return
+                }
+
+                var resolvedParams: HashMap<String, Any>? = null
+                var resolverError: Throwable? = null
+                currentElements.updateIntent(
+                    completion = {
+                        try {
+                            val configuration = resolveElementsIntent()
+                            resolvedParams = configuration
+                            PaymentSessionConfiguration(
+                                configuration["sdkAuthorization"] as String
+                            )
+                        } catch (error: Exception) {
+                            resolverError = error
+                            throw error
+                        }
+                    },
+                    onResult = { updateResult ->
+                        val map = HashMap<String, Any>()
+                        resolverError?.let { error ->
+                            map["type"] = "failed"
+                            map["message"] = error.message ?: "Intent resolver failed"
+                            callBackHandler(result, map)
+                            return@updateIntent
+                        }
+
+                        resolvedParams?.let { params.putAll(it) }
+                        when (updateResult) {
+                            ElementsUpdateResult.Success -> {
+                                map["type"] = "success"
+                            }
+                            is ElementsUpdateResult.PartialFailure -> {
+                                map["type"] = "partial_failure"
+                                map["message"] =
+                                    "${updateResult.failed.size} element(s) failed to update"
+                            }
+                            is ElementsUpdateResult.TotalFailure -> {
+                                map["type"] = "failed"
+                                map["message"] = updateResult.cause.message
+                                    ?: "Elements update failed"
+                            }
+                        }
+                        callBackHandler(result, map)
+                    }
+                )
+            }
+
             "elements" -> {
                 call.argument<HashMap<String, Any>>("params")?.let { p ->
                     params.putAll(p)
@@ -617,6 +676,62 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
             }
         }
     }
+
+    private suspend fun resolveElementsIntent(): HashMap<String, Any> =
+        suspendCoroutine { continuation ->
+            channel.invokeMethod(
+                "resolveElementsIntent",
+                null,
+                object : MethodChannel.Result {
+                    override fun success(result: Any?) {
+                        val response = result as? Map<*, *>
+                        if (response == null) {
+                            continuation.resumeWithException(
+                                IllegalStateException(
+                                    "Intent resolver returned an invalid configuration"
+                                )
+                            )
+                            return
+                        }
+                        val configuration = HashMap<String, Any>()
+                        response.forEach { (key, value) ->
+                            if (key is String && value != null) {
+                                configuration[key] = value
+                            }
+                        }
+                        val sdkAuthorization =
+                            configuration["sdkAuthorization"] as? String ?: ""
+                        if (sdkAuthorization.isBlank()) {
+                            continuation.resumeWithException(
+                                IllegalArgumentException("sdkAuthorization is required")
+                            )
+                            return
+                        }
+                        continuation.resume(configuration)
+                    }
+
+                    override fun error(
+                        errorCode: String,
+                        errorMessage: String?,
+                        errorDetails: Any?
+                    ) {
+                        continuation.resumeWithException(
+                            IllegalStateException(
+                                errorMessage ?: "Intent resolver failed ($errorCode)"
+                            )
+                        )
+                    }
+
+                    override fun notImplemented() {
+                        continuation.resumeWithException(
+                            UnsupportedOperationException(
+                                "Intent resolver is not implemented by Dart"
+                            )
+                        )
+                    }
+                }
+            )
+        }
 
     companion object {
         private const val CONFIRM_TIMEOUT_MS = 30000L

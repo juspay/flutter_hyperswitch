@@ -149,6 +149,32 @@ String _errorMessage(Object error) {
   return error is HyperswitchException ? error.message : error.toString();
 }
 
+String _requireSdkAuthorization(Map<String, dynamic> body) {
+  final sdkAuthorization = body['sdkAuthorization'];
+  if (sdkAuthorization is! String || sdkAuthorization.trim().isEmpty) {
+    throw const FormatException('Payment API did not return sdkAuthorization');
+  }
+  return sdkAuthorization;
+}
+
+Future<String> _fetchUpdatedSdkAuthorization(
+  String endpoint,
+  String paymentId,
+) async {
+  final response = await http.post(
+    Uri.parse('$endpoint/update-payment'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'paymentId': paymentId}),
+  );
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final error = body['error'];
+    final message = error is Map ? error['message'] : null;
+    throw Exception(message ?? 'Payment update failed');
+  }
+  return _requireSdkAuthorization(body);
+}
+
 Configuration _buildPaymentElementConfiguration() {
   return Configuration(
     displayDefaultSavedPaymentIcon: false,
@@ -243,7 +269,7 @@ class _PaymentSheetTabState extends State<PaymentSheetTab> {
           profileId: body['profileId'] as String?,
         ),
       );
-      final sdkAuth = (body['sdkAuthorization'] ?? body['clientSecret']) as String;
+      final sdkAuth = _requireSdkAuthorization(body);
       _sessionId = await _hyper.initPaymentSession(
         PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
       );
@@ -324,11 +350,13 @@ class _HeadlessTabState extends State<HeadlessTab> {
   final _hyper = FlutterHyperswitch();
   Elements? _elements;
   String? _sdkAuthorization;
+  String? _paymentId;
   SavedSession? _savedSession;
   String _statusText = '';
   String _resultText = '';
   String _paymentMethodText = '';
   bool _isInitialized = false;
+  bool _isUpdatingIntent = false;
   bool _showConfirm = false;
 
   final String _cvcWidgetId = 'cvc_headless_1';
@@ -356,8 +384,13 @@ class _HeadlessTabState extends State<HeadlessTab> {
           profileId: body['profileId'] as String?,
         ),
       );
-      final sdkAuth = (body['sdkAuthorization'] ?? body['clientSecret']) as String;
+      final sdkAuth = _requireSdkAuthorization(body);
+      final paymentId = body['paymentId'];
+      if (paymentId is! String || paymentId.isEmpty) {
+        throw const FormatException('Payment API did not return paymentId');
+      }
       _sdkAuthorization = sdkAuth;
+      _paymentId = paymentId;
       _elements = await _hyper.elements(
         PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
       );
@@ -401,6 +434,28 @@ class _HeadlessTabState extends State<HeadlessTab> {
       });
     } catch (error) {
       setState(() => _resultText = _errorMessage(error));
+    }
+  }
+
+  Future<void> _updateIntent() async {
+    final elements = _elements;
+    final paymentId = _paymentId;
+    if (elements == null || paymentId == null) return;
+    setState(() => _isUpdatingIntent = true);
+    try {
+      final session = await elements.updateIntent(() async {
+        final sdkAuthorization = await _fetchUpdatedSdkAuthorization(
+          widget.endpoint,
+          paymentId,
+        );
+        return PaymentSessionConfiguration(sdkAuthorization: sdkAuthorization);
+      });
+      _sdkAuthorization = session.sessionData;
+      setState(() => _statusText = 'Intent updated');
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    } finally {
+      setState(() => _isUpdatingIntent = false);
     }
   }
 
@@ -477,6 +532,13 @@ class _HeadlessTabState extends State<HeadlessTab> {
                 ),
               ),
               const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _isUpdatingIntent ? null : _updateIntent,
+                child: Text(
+                  _isUpdatingIntent ? 'Updating Intent...' : 'Update Intent',
+                ),
+              ),
+              const SizedBox(height: 16),
               if (_showConfirm)
                 ElevatedButton(
                   onPressed: _confirm,
@@ -511,9 +573,11 @@ class WidgetsTab extends StatefulWidget {
 class _WidgetsTabState extends State<WidgetsTab> {
   final _hyper = FlutterHyperswitch();
   Elements? _elements;
+  String? _paymentId;
   String _statusText = '';
   String _resultText = '';
   bool _isInitializing = false;
+  bool _isUpdatingIntent = false;
   bool _elementsReady = false;
 
   final String _paymentElementId = 'pe_widgets_1';
@@ -543,7 +607,12 @@ class _WidgetsTabState extends State<WidgetsTab> {
           profileId: body['profileId'] as String?,
         ),
       );
-      final sdkAuth = (body['sdkAuthorization'] ?? body['clientSecret']) as String;
+      final sdkAuth = _requireSdkAuthorization(body);
+      final paymentId = body['paymentId'];
+      if (paymentId is! String || paymentId.isEmpty) {
+        throw const FormatException('Payment API did not return paymentId');
+      }
+      _paymentId = paymentId;
       _elements = await _hyper.elements(
         PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
       );
@@ -567,6 +636,27 @@ class _WidgetsTabState extends State<WidgetsTab> {
       });
     } catch (error) {
       setState(() => _resultText = "Confirm failed: $error");
+    }
+  }
+
+  Future<void> _updateIntent() async {
+    final elements = _elements;
+    final paymentId = _paymentId;
+    if (elements == null || paymentId == null) return;
+    setState(() => _isUpdatingIntent = true);
+    try {
+      await elements.updateIntent(() async {
+        final sdkAuthorization = await _fetchUpdatedSdkAuthorization(
+          widget.endpoint,
+          paymentId,
+        );
+        return PaymentSessionConfiguration(sdkAuthorization: sdkAuthorization);
+      });
+      setState(() => _statusText = 'Intent updated');
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    } finally {
+      setState(() => _isUpdatingIntent = false);
     }
   }
 
@@ -638,6 +728,13 @@ class _WidgetsTabState extends State<WidgetsTab> {
                     );
                     return true;
                   },
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _isUpdatingIntent ? null : _updateIntent,
+                child: Text(
+                  _isUpdatingIntent ? 'Updating Intent...' : 'Update Intent',
                 ),
               ),
               const SizedBox(height: 12),

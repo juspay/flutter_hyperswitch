@@ -1,6 +1,8 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'flutter_hyperswitch_method_channel.dart';
 
+typedef PlatformIntentResolver = Future<Map<String, dynamic>> Function();
+
 /// An abstract class representing the platform interface for Flutter Hyperswitch.
 abstract class FlutterHyperswitchPlatform extends PlatformInterface {
   /// Constructs a FlutterHyperswitchPlatform.
@@ -89,6 +91,14 @@ abstract class FlutterHyperswitchPlatform extends PlatformInterface {
 
   Future<Map<String, dynamic>?> updateIntent(String sdkAuthorization) {
     throw UnimplementedError('updateIntent() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> updateElementsIntent(
+    PlatformIntentResolver intentResolver,
+  ) {
+    throw UnimplementedError(
+      'updateElementsIntent() has not been implemented.',
+    );
   }
 
   Future<Map<String, dynamic>?> elements(Map<String, dynamic> params) {

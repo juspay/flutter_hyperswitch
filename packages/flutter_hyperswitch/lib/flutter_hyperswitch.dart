@@ -7,6 +7,8 @@ export 'widgets.dart';
 
 const _eventChannel = EventChannel('flutter_hyperswitch/events');
 
+typedef IntentResolver = Future<PaymentSessionConfiguration> Function();
+
 /// A class providing methods to interact with Hyperswitch functionality.
 class FlutterHyperswitch {
   final Map<String, SessionPaymentMethodOrError> _sessionMap = {};
@@ -365,7 +367,13 @@ class FlutterHyperswitch {
       if (type != "failed") {
         final session = Session(message);
         _sessionMap[params.sdkAuthorization] = session;
-        return Elements._(session, params.sdkAuthorization);
+        return Elements._(session, params.sdkAuthorization, (
+          previousAuthorization,
+          updatedSession,
+        ) {
+          _sessionMap.remove(previousAuthorization);
+          _sessionMap[updatedSession.sessionData] = updatedSession;
+        });
       } else {
         return Future.error(
           HyperswitchException(code: type, message: message),
@@ -383,12 +391,18 @@ class FlutterHyperswitch {
 }
 
 class Elements {
-  final String _sdkAuthorization;
+  Session _session;
+  String _sdkAuthorization;
+  final void Function(String previousAuthorization, Session session)
+  _onSessionUpdated;
   final Map<String, PaymentElementController> _paymentElementControllers = {};
   final Map<String, CvcWidgetController> _cvcWidgetControllers = {};
   StreamSubscription? _eventSubscription;
+  bool _updateIntentInProgress = false;
 
-  Elements._(_, this._sdkAuthorization);
+  Elements._(this._session, this._sdkAuthorization, this._onSessionUpdated);
+
+  Session get session => _session;
 
   Future<void> _ensureEventListener() async {
     if (_eventSubscription != null) return;
@@ -496,6 +510,64 @@ class Elements {
           ),
         );
       }
+    }
+  }
+
+  Future<Session> updateIntent(IntentResolver intentResolver) async {
+    if (_updateIntentInProgress) {
+      throw HyperswitchException(
+        code: 'already_in_progress',
+        message: 'An Elements intent update is already in progress',
+      );
+    }
+    _updateIntentInProgress = true;
+    try {
+      Future<PaymentSessionConfiguration>? pendingConfiguration;
+      PaymentSessionConfiguration? resolvedConfiguration;
+
+      Future<Map<String, dynamic>> resolveIntent() async {
+        pendingConfiguration ??= Future<PaymentSessionConfiguration>.sync(
+          intentResolver,
+        );
+        final configuration = await pendingConfiguration!;
+        if (configuration.sdkAuthorization.trim().isEmpty) {
+          throw HyperswitchException(
+            code: 'invalid_sdk_authorization',
+            message: 'sdkAuthorization must not be empty',
+          );
+        }
+        resolvedConfiguration = configuration;
+        return configuration.toJson();
+      }
+
+      final response =
+          await FlutterHyperswitchPlatform.instance.updateElementsIntent(
+            resolveIntent,
+          ) ??
+          {};
+      final type = response['type'] as String? ?? 'failed';
+      final configuration = resolvedConfiguration;
+      if (configuration != null) {
+        final previousAuthorization = _sdkAuthorization;
+        _sdkAuthorization = configuration.sdkAuthorization.trim();
+        _session = Session(_sdkAuthorization);
+        _onSessionUpdated(previousAuthorization, _session);
+      }
+      if (type != 'success') {
+        throw HyperswitchException(
+          code: type,
+          message: response['message'] as String? ?? 'Update Intent Failed',
+        );
+      }
+      return _session;
+    } catch (error) {
+      if (error is HyperswitchException) rethrow;
+      throw HyperswitchException(
+        code: 'error',
+        message: 'Update Intent Failed: $error',
+      );
+    } finally {
+      _updateIntentInProgress = false;
     }
   }
 

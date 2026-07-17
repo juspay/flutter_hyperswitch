@@ -4,9 +4,28 @@ import 'flutter_hyperswitch_platform_interface.dart';
 
 /// An implementation of [FlutterHyperswitchPlatform] that uses method channels.
 class MethodChannelFlutterHyperswitch extends FlutterHyperswitchPlatform {
+  MethodChannelFlutterHyperswitch() {
+    methodChannel.setMethodCallHandler(_handleNativeMethodCall);
+  }
+
   /// The method channel used to interact with the native platform.
   @visibleForTesting
   final methodChannel = const MethodChannel('flutter_hyperswitch');
+  PlatformIntentResolver? _elementsIntentResolver;
+
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    if (call.method != 'resolveElementsIntent') {
+      throw MissingPluginException('Unknown native method ${call.method}');
+    }
+    final resolver = _elementsIntentResolver;
+    if (resolver == null) {
+      throw PlatformException(
+        code: 'missing_intent_resolver',
+        message: 'No Elements intent update is in progress',
+      );
+    }
+    return resolver();
+  }
 
   @override
   init(Map<String, dynamic> params) {
@@ -136,6 +155,27 @@ class MethodChannelFlutterHyperswitch extends FlutterHyperswitchPlatform {
       return resultMap;
     }
     return null;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> updateElementsIntent(
+    PlatformIntentResolver intentResolver,
+  ) async {
+    if (_elementsIntentResolver != null) {
+      throw PlatformException(
+        code: 'already_in_progress',
+        message: 'An Elements intent update is already in progress',
+      );
+    }
+    _elementsIntentResolver = intentResolver;
+    try {
+      final result = await methodChannel.invokeMethod<Map<dynamic, dynamic>>(
+        'updateElementsIntent',
+      );
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } finally {
+      _elementsIntentResolver = null;
+    }
   }
 
   @override
