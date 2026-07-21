@@ -3,8 +3,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show Factory;
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
-import 'package:flutter/gestures.dart' show OneSequenceGestureRecognizer;
+import 'package:flutter/gestures.dart'
+    show OneSequenceGestureRecognizer, EagerGestureRecognizer;
 import 'flutter_hyperswitch.dart';
+
+// The native payment form must win the gesture arena (e.g. inside a
+// scrollable), otherwise taps on its fields are swallowed by Flutter.
+Set<Factory<OneSequenceGestureRecognizer>> _eagerGestureRecognizers() => {
+  Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+};
+
+Widget _androidPlatformView(String viewType, String widgetId) {
+  final creationParams = <String, dynamic>{'widgetId': widgetId};
+  return PlatformViewLink(
+    viewType: viewType,
+    surfaceFactory: (context, controller) {
+      return AndroidViewSurface(
+        controller: controller as AndroidViewController,
+        gestureRecognizers: _eagerGestureRecognizers(),
+        hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+      );
+    },
+    onCreatePlatformView: (params) {
+      return PlatformViewsService.initExpensiveAndroidView(
+        id: params.id,
+        viewType: viewType,
+        layoutDirection: TextDirection.ltr,
+        creationParams: creationParams,
+        creationParamsCodec: const StandardMessageCodec(),
+      )
+        ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+        ..create();
+    },
+  );
+}
 
 class _PlatformPaymentElement extends StatelessWidget {
   final String widgetId;
@@ -13,37 +45,14 @@ class _PlatformPaymentElement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final creationParams = <String, dynamic>{'widgetId': widgetId};
-
     if (Platform.isAndroid) {
-      return PlatformViewLink(
-        viewType: 'hyperswitch_payment_element',
-        surfaceFactory: (context, controller) {
-          return AndroidViewSurface(
-            controller: controller as AndroidViewController,
-            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-            hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-          );
-        },
-        onCreatePlatformView: (params) {
-          return PlatformViewsService.initExpensiveAndroidView(
-            id: params.id,
-            viewType: 'hyperswitch_payment_element',
-            layoutDirection: TextDirection.ltr,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-          )
-            ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-            ..create();
-        },
-      );
-    } else {
-      return UiKitView(
-        viewType: 'hyperswitch_payment_element',
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
-      );
+      return _androidPlatformView('hyperswitch_payment_element', widgetId);
     }
+    // TODO(ios): restore UiKitView once the iOS plugin registers the
+    // 'hyperswitch_payment_element' platform view factory.
+    throw UnsupportedError(
+      'PaymentElement is currently supported on Android only',
+    );
   }
 }
 
@@ -54,37 +63,12 @@ class _PlatformCvcWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final creationParams = <String, dynamic>{'widgetId': widgetId};
-
     if (Platform.isAndroid) {
-      return PlatformViewLink(
-        viewType: 'hyperswitch_cvc_widget',
-        surfaceFactory: (context, controller) {
-          return AndroidViewSurface(
-            controller: controller as AndroidViewController,
-            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-            hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-          );
-        },
-        onCreatePlatformView: (params) {
-          return PlatformViewsService.initExpensiveAndroidView(
-            id: params.id,
-            viewType: 'hyperswitch_cvc_widget',
-            layoutDirection: TextDirection.ltr,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-          )
-            ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-            ..create();
-        },
-      );
-    } else {
-      return UiKitView(
-        viewType: 'hyperswitch_cvc_widget',
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
-      );
+      return _androidPlatformView('hyperswitch_cvc_widget', widgetId);
     }
+    // TODO(ios): restore UiKitView once the iOS plugin registers the
+    // 'hyperswitch_cvc_widget' platform view factory.
+    throw UnsupportedError('CvcWidget is currently supported on Android only');
   }
 }
 

@@ -6,19 +6,24 @@ import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 import io.hyperswitch.view.CVCWidget
+import io.hyperswitch.view.HyperswitchElement
 import io.hyperswitch.view.PaymentElement
+import java.util.concurrent.ConcurrentHashMap
 
-class PaymentElementPlatformView : PlatformView {
-    private val view: PaymentElement
-    private val widgetId: String?
+class PaymentElementPlatformView(
+    context: Context,
+    viewId: Int,
+    args: Map<String, Any?>?,
+    private val widgetViews: ConcurrentHashMap<String, HyperswitchElement>
+) : PlatformView {
+    private val view: PaymentElement = PaymentElement(context)
+    private val widgetId: String? = args?.get("widgetId") as? String
 
-    constructor(context: Context, viewId: Int, args: Map<String, Any?>?) {
-        view = PaymentElement(context)
+    init {
         view.id = viewId
-        widgetId = args?.get("widgetId") as? String
         if (widgetId != null) {
             view.tag = widgetId
-            FlutterHyperswitchPlugin.widgetViews[widgetId] = view
+            widgetViews[widgetId] = view
         }
     }
 
@@ -26,31 +31,36 @@ class PaymentElementPlatformView : PlatformView {
 
     override fun dispose() {
         if (widgetId != null) {
-            FlutterHyperswitchPlugin.widgetViews.remove(widgetId)
+            widgetViews.remove(widgetId, view)
         }
         (view.parent as? android.view.ViewGroup)?.removeView(view)
     }
 }
 
-class PaymentElementPlatformViewFactory : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+class PaymentElementPlatformViewFactory(
+    private val widgetViews: ConcurrentHashMap<String, HyperswitchElement>
+) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
         @Suppress("UNCHECKED_CAST")
         val params = args as? Map<String, Any?>
-        return PaymentElementPlatformView(context, viewId, params)
+        return PaymentElementPlatformView(context, viewId, params, widgetViews)
     }
 }
 
-class CvcWidgetPlatformView : PlatformView {
-    private val view: CVCWidget
-    private val widgetId: String?
+class CvcWidgetPlatformView(
+    context: Context,
+    viewId: Int,
+    args: Map<String, Any?>?,
+    private val widgetViews: ConcurrentHashMap<String, HyperswitchElement>
+) : PlatformView {
+    private val view: CVCWidget = CVCWidget(context)
+    private val widgetId: String? = args?.get("widgetId") as? String
 
-    constructor(context: Context, viewId: Int, args: Map<String, Any?>?) {
-        view = CVCWidget(context)
+    init {
         view.id = viewId
-        widgetId = args?.get("widgetId") as? String
         if (widgetId != null) {
             view.tag = widgetId
-            FlutterHyperswitchPlugin.widgetViews[widgetId] = view
+            widgetViews[widgetId] = view
         }
     }
 
@@ -58,16 +68,18 @@ class CvcWidgetPlatformView : PlatformView {
 
     override fun dispose() {
         if (widgetId != null) {
-            FlutterHyperswitchPlugin.widgetViews.remove(widgetId)
+            widgetViews.remove(widgetId, view)
         }
         (view.parent as? android.view.ViewGroup)?.removeView(view)
     }
 }
 
-class CvcWidgetPlatformViewFactory : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+class CvcWidgetPlatformViewFactory(
+    private val widgetViews: ConcurrentHashMap<String, HyperswitchElement>
+) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
         @Suppress("UNCHECKED_CAST")
         val params = args as? Map<String, Any?>
-        return CvcWidgetPlatformView(context, viewId, params)
+        return CvcWidgetPlatformView(context, viewId, params, widgetViews)
     }
 }

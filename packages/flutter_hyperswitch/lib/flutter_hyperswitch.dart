@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'flutter_hyperswitch_platform_interface.dart';
 import 'types.dart';
@@ -6,6 +7,15 @@ export 'types.dart';
 export 'widgets.dart';
 
 const _eventChannel = EventChannel('flutter_hyperswitch/events');
+
+/// Single shared subscription to the native event channel.
+///
+/// The native side holds exactly one [EventChannel] sink, and a second
+/// `receiveBroadcastStream()` subscription replaces (and its cancel kills)
+/// the first. All listeners must therefore share this one broadcast stream:
+/// the platform sees a single listen/cancel lifecycle while any number of
+/// Dart listeners (Elements widgets, payment sheet callbacks) come and go.
+final Stream<dynamic> _hyperswitchEvents = _eventChannel.receiveBroadcastStream();
 
 typedef IntentResolver = Future<PaymentSessionConfiguration> Function();
 
@@ -321,11 +331,12 @@ class FlutterHyperswitch {
     StreamSubscription? eventSubscription;
     try {
       if (onPaymentEvent != null) {
-        eventSubscription = _eventChannel.receiveBroadcastStream().listen(
-          (event) {
-            onPaymentEvent(PaymentEvent.fromMap(event as Map<dynamic, dynamic>));
-          },
-        );
+        eventSubscription = _hyperswitchEvents.listen((event) {
+          final map = event as Map<dynamic, dynamic>;
+          // Widget-scoped events carry a widgetId and belong to Elements.
+          if (map['widgetId'] != null) return;
+          onPaymentEvent(PaymentEvent.fromMap(map));
+        });
       }
 
       final params = <String, dynamic>{
@@ -350,6 +361,15 @@ class FlutterHyperswitch {
   }
 
   Future<Elements> elements(PaymentSessionConfiguration params) async {
+    if (!Platform.isAndroid) {
+      return Future.error(
+        HyperswitchException(
+          code: "unsupported_platform",
+          message:
+              "Elements and widget APIs are currently supported on Android only",
+        ),
+      );
+    }
     try {
       final response = await FlutterHyperswitchPlatform.instance
           .elements(params.toJson());
@@ -406,7 +426,7 @@ class Elements {
 
   Future<void> _ensureEventListener() async {
     if (_eventSubscription != null) return;
-    _eventSubscription = _eventChannel.receiveBroadcastStream().listen((event) {
+    _eventSubscription = _hyperswitchEvents.listen((event) {
       final map = event as Map<dynamic, dynamic>;
       final widgetId = map['widgetId'] as String?;
       if (widgetId == null) return;
@@ -477,7 +497,6 @@ class Elements {
     final params = <String, dynamic>{
       'type': type,
       'widgetId': widgetId,
-      'sdkAuthorization': _sdkAuthorization,
       if (configuration != null) 'configuration': configuration.toJson(),
     };
 

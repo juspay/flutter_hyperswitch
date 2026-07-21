@@ -35,9 +35,6 @@ import io.hyperswitch.sdk.Hyperswitch
 import io.hyperswitch.sdk.HyperswitchBoundElement
 import io.hyperswitch.sdk.HyperswitchInstance
 import io.hyperswitch.sdk.PaymentSession
-import io.hyperswitch.view.CVCWidget
-import io.hyperswitch.view.PaymentElement
-import io.hyperswitch.utils.ConversionUtils
 import io.flutter.plugin.platform.PlatformViewRegistry
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -62,6 +59,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     private var elements: Elements? = null
     private val boundElements = ConcurrentHashMap<String, HyperswitchBoundElement>()
     private val pendingConfirmCallbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
+    private val widgetViews = ConcurrentHashMap<String, io.hyperswitch.view.HyperswitchElement>()
 
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -79,8 +77,8 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         })
 
         val registry: PlatformViewRegistry = flutterPluginBinding.platformViewRegistry
-        registry.registerViewFactory("hyperswitch_payment_element", PaymentElementPlatformViewFactory())
-        registry.registerViewFactory("hyperswitch_cvc_widget", CvcWidgetPlatformViewFactory())
+        registry.registerViewFactory("hyperswitch_payment_element", PaymentElementPlatformViewFactory(widgetViews))
+        registry.registerViewFactory("hyperswitch_cvc_widget", CvcWidgetPlatformViewFactory(widgetViews))
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -161,72 +159,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     params.putAll(it)
                 }
 
-                val fontName = (params["configuration"] as? HashMap<*, *>)?.let { config ->
-                    (config["appearance"] as? HashMap<*, *>)?.let { appearance ->
-                        (appearance["typography"] as? HashMap<*, *>)?.let { typography ->
-                            typography["fontResId"] as? String
-                        }
-                    }
-                }
-
-                fontName?.let { name ->
-
-                    val fonts = arrayOf(
-                        "Black",
-                        "BlackItalic",
-                        "Bold",
-                        "BoldItalic",
-                        "ExtraBold",
-                        "ExtraBoldItalic",
-                        "ExtraLight",
-                        "ExtraLightItalic",
-                        "Italic",
-                        "Light",
-                        "LightItalic",
-                        "Medium",
-                        "MediumItalic",
-                        "Regular",
-                        "SemiBold",
-                        "SemiBoldItalic",
-                        "Thin",
-                        "ThinItalic"
-                    )
-
-                    val loader = FlutterInjector.instance().flutterLoader()
-
-                    try {
-                        val fontKey = loader.getLookupKeyForAsset("fonts/${name}.ttf")
-                        val myTypeface = Typeface.createFromAsset(
-                            activity.applicationContext.resources.assets, fontKey
-                        )
-                        ReactFontManager.getInstance().addCustomFont(
-                            name, myTypeface
-                        )
-                    } catch (_: Exception) {
-                        Log.w(
-                            "Hyperswitch Warning",
-                            "Font not found",
-                        )
-                    }
-
-                    for (suffix in fonts) {
-                        try {
-                            val fontKey = loader.getLookupKeyForAsset("fonts/${name}-${suffix}.ttf")
-                            val myTypeface = Typeface.createFromAsset(
-                                activity.applicationContext.resources.assets, fontKey
-                            )
-                            ReactFontManager.getInstance().addCustomFont(
-                                name + if (suffix == "Regular") "" else suffix, myTypeface
-                            )
-                        } catch (_: Exception) {
-                            Log.w(
-                                "Hyperswitch Warning",
-                                "Font not found",
-                            )
-                        }
-                    }
-
-                }
+                registerCustomFonts(params["configuration"] as? HashMap<*, *>)
 
                 val sdkAuthorization = params["sdkAuthorization"] as String?
                     ?: params["clientSecret"] as String?
@@ -331,13 +264,16 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
             "updateIntent" -> {
                 val sdkAuthorization = call.argument<String>("sdkAuthorization") ?: ""
+                val session = paymentSession
                 if (sdkAuthorization.isEmpty()) {
                     val map = HashMap<String, Any>()
                     map["type"] = "failed"
                     map["message"] = "sdkAuthorization is required"
                     callBackHandler(result, map)
+                } else if (session == null) {
+                    callBackHandler(result, defaultMap)
                 } else {
-                    paymentSession?.updateSdkAuthorization(sdkAuthorization)
+                    session.updateSdkAuthorization(sdkAuthorization)
                     val map = HashMap<String, Any>()
                     map["type"] = "success"
                     callBackHandler(result, map)
@@ -403,6 +339,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 call.argument<HashMap<String, Any>>("params")?.let { p ->
                     params.putAll(p)
                 }
+                registerCustomFonts(params["configuration"] as? HashMap<*, *>)
                 val sdkAuthorization = params["sdkAuthorization"] as String?
                     ?: params["clientSecret"] as String?
                     ?: ""
@@ -453,7 +390,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     return
                 }
 
-                val view = FlutterHyperswitchPlugin.widgetViews[widgetId]
+                val view = widgetViews[widgetId]
                 if (view == null) {
                     val map = HashMap<String, Any>()
                     map["type"] = "failed"
@@ -464,79 +401,95 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
                 val hsElement: io.hyperswitch.view.HyperswitchElement = view
 
+                registerCustomFonts(configuration)
+
                 // Flatten configuration into a top-level map (SDK expects flat keys:
                 // appearance, paymentMethodLayout, etc. — NOT nested under "configuration")
                 val configMap = HashMap<String, Any?>()
                 if (configuration != null) {
                     for ((key, value) in configuration) {
-                        if (key != null) configMap[key.toString()] = value
+                        if (key != null && value != null) configMap[key.toString()] = value
                     }
                 }
                 val subscribedEvents = (configMap.remove("subscribedEvents") as? List<*>) ?: emptyList<String>()
 
                 activity.runOnUiThread {
-                    // Unbind existing element if present (prevents stale bindings on re-create)
-                    boundElements.remove(widgetId)?.let { oldBound ->
-                        try { els.unbind(oldBound) } catch (_: Exception) {}
-                        try { oldBound.destroy() } catch (_: Exception) {}
-                    }
-
-                    if (type == "paymentElement" || type == "payment") {
-                        val bound = els.bind(hsElement, configMap) {
-                            if (subscribedEvents.contains("FORM_STATUS"))
-                                on(PaymentEvents.FormStatus) { event ->
-                                    emitWidgetEvent(widgetId, "FORM_STATUS", event.payload)
-                                }
-                            if (subscribedEvents.contains("PAYMENT_METHOD_STATUS"))
-                                on(PaymentEvents.PaymentMethodStatus) { event ->
-                                    emitWidgetEvent(widgetId, "PAYMENT_METHOD_STATUS", event.payload)
-                                }
-                            if (subscribedEvents.contains("PAYMENT_METHOD_INFO_CARD"))
-                                on(PaymentEvents.PaymentMethodInfoCard) { event ->
-                                    emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_CARD", event.payload)
-                                }
-                            if (subscribedEvents.contains("PAYMENT_METHOD_INFO_BILLING_ADDRESS"))
-                                on(PaymentEvents.PaymentMethodInfoBillingAddress) { event ->
-                                    emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_BILLING_ADDRESS", event.payload)
-                                }
+                    try {
+                        // Unbind existing element if present (prevents stale bindings on re-create)
+                        boundElements.remove(widgetId)?.let { oldBound ->
+                            pendingConfirmCallbacks.remove(widgetId)
+                            try { els.unbind(oldBound) } catch (_: Exception) {}
+                            try { oldBound.destroy() } catch (_: Exception) {}
                         }
-                        boundElements[widgetId] = bound
-                        bound.onPaymentResult { paymentResult ->
-                            val resultMap = HashMap<String, Any>()
-                            when (paymentResult) {
-                                is PaymentResult.Canceled -> {
-                                    resultMap["type"] = "canceled"
-                                    resultMap["message"] = paymentResult.data
+
+                        if (type == "paymentElement" || type == "payment") {
+                            val bound = els.bind(hsElement, configMap) {
+                                if (subscribedEvents.contains("FORM_STATUS"))
+                                    on(PaymentEvents.FormStatus) { event ->
+                                        emitWidgetEvent(widgetId, "FORM_STATUS", event.payload)
+                                    }
+                                if (subscribedEvents.contains("PAYMENT_METHOD_STATUS"))
+                                    on(PaymentEvents.PaymentMethodStatus) { event ->
+                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_STATUS", event.payload)
+                                    }
+                                if (subscribedEvents.contains("PAYMENT_METHOD_INFO_CARD"))
+                                    on(PaymentEvents.PaymentMethodInfoCard) { event ->
+                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_CARD", event.payload)
+                                    }
+                                if (subscribedEvents.contains("PAYMENT_METHOD_INFO_BILLING_ADDRESS"))
+                                    on(PaymentEvents.PaymentMethodInfoBillingAddress) { event ->
+                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_BILLING_ADDRESS", event.payload)
+                                    }
+                            }
+                            boundElements[widgetId] = bound
+                            bound.onPaymentResult { paymentResult ->
+                                val resultMap = HashMap<String, Any>()
+                                when (paymentResult) {
+                                    is PaymentResult.Canceled -> {
+                                        resultMap["type"] = "canceled"
+                                        resultMap["message"] = paymentResult.data
+                                    }
+                                    is PaymentResult.Failed -> {
+                                        resultMap["type"] = "failed"
+                                        resultMap["message"] = paymentResult.throwable.message ?: "Unknown Error"
+                                    }
+                                    is PaymentResult.Completed -> {
+                                        resultMap["type"] = "completed"
+                                        resultMap["message"] = paymentResult.data
+                                    }
                                 }
-                                is PaymentResult.Failed -> {
-                                    resultMap["type"] = "failed"
-                                    resultMap["message"] = paymentResult.throwable.message ?: "Unknown Error"
-                                }
-                                is PaymentResult.Completed -> {
-                                    resultMap["type"] = "completed"
-                                    resultMap["message"] = paymentResult.data
+                                emitWidgetEvent(widgetId, "onPaymentResult", resultMap)
+                            }
+                            bound.onPaymentConfirmButtonClick { data, callback ->
+                                pendingConfirmCallbacks[widgetId] = callback
+                                val payloadMap = HashMap<String, Any>()
+                                payloadMap["paymentMethodType"] = data?.paymentMethodType ?: ""
+                                emitWidgetEvent(widgetId, "onPaymentConfirmButtonClick", payloadMap)
+                            }
+                        } else if (type == "cvcWidget" || type == "cvc") {
+                            val bound = els.bind(hsElement, configMap) {
+                                on(CvcWidgetEvents.CvcStatus) { event ->
+                                    emitWidgetEvent(widgetId, "CVC_STATUS", event.payload)
                                 }
                             }
-                            emitWidgetEvent(widgetId, "onPaymentResult", resultMap)
+                            boundElements[widgetId] = bound
+                        } else {
+                            val map = HashMap<String, Any>()
+                            map["type"] = "failed"
+                            map["message"] = "Unknown element type: $type"
+                            callBackHandler(result, map)
+                            return@runOnUiThread
                         }
-                        bound.onPaymentConfirmButtonClick { data, callback ->
-                            pendingConfirmCallbacks[widgetId] = callback
-                            val payloadMap = HashMap<String, Any>()
-                            payloadMap["paymentMethodType"] = data?.paymentMethodType ?: ""
-                            emitWidgetEvent(widgetId, "onPaymentConfirmButtonClick", payloadMap)
-                        }
-                    } else if (type == "cvcWidget" || type == "cvc") {
-                        val bound = els.bind(hsElement, configMap) {
-                            on(CvcWidgetEvents.CvcStatus) { event ->
-                                emitWidgetEvent(widgetId, "CVC_STATUS", event.payload)
-                            }
-                        }
-                        boundElements[widgetId] = bound
-                    }
 
-                    val map = HashMap<String, Any>()
-                    map["type"] = "success"
-                    callBackHandler(result, map)
+                        val map = HashMap<String, Any>()
+                        map["type"] = "success"
+                        callBackHandler(result, map)
+                    } catch (error: Exception) {
+                        val map = HashMap<String, Any>()
+                        map["type"] = "failed"
+                        map["message"] = error.message ?: "createElement failed"
+                        callBackHandler(result, map)
+                    }
                 }
             }
 
@@ -551,22 +504,29 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     return
                 }
                 activity.runOnUiThread {
-                    bound.confirmPayment { paymentResult ->
-                        val map = HashMap<String, Any>()
-                        when (paymentResult) {
-                            is PaymentResult.Canceled -> {
-                                map["type"] = "canceled"
-                                map["message"] = paymentResult.data
+                    try {
+                        bound.confirmPayment { paymentResult ->
+                            val map = HashMap<String, Any>()
+                            when (paymentResult) {
+                                is PaymentResult.Canceled -> {
+                                    map["type"] = "canceled"
+                                    map["message"] = paymentResult.data
+                                }
+                                is PaymentResult.Failed -> {
+                                    map["type"] = "failed"
+                                    map["message"] = paymentResult.throwable.message ?: "Unknown Error"
+                                }
+                                is PaymentResult.Completed -> {
+                                    map["type"] = "completed"
+                                    map["message"] = paymentResult.data
+                                }
                             }
-                            is PaymentResult.Failed -> {
-                                map["type"] = "failed"
-                                map["message"] = paymentResult.throwable.message ?: "Unknown Error"
-                            }
-                            is PaymentResult.Completed -> {
-                                map["type"] = "completed"
-                                map["message"] = paymentResult.data
-                            }
+                            callBackHandler(result, map)
                         }
+                    } catch (error: Exception) {
+                        val map = HashMap<String, Any>()
+                        map["type"] = "failed"
+                        map["message"] = error.message ?: "Confirm Payment Failed"
                         callBackHandler(result, map)
                     }
                 }
@@ -577,7 +537,10 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 val proceed = call.argument<Boolean>("proceed") ?: false
                 val callback = pendingConfirmCallbacks.remove(widgetId)
                 activity.runOnUiThread {
-                    callback?.invoke(proceed)
+                    try {
+                        callback?.invoke(proceed)
+                    } catch (_: Exception) {
+                    }
                 }
                 result.success(null)
             }
@@ -585,9 +548,17 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
             "destroyElement" -> {
                 val widgetId = call.argument<String>("widgetId") ?: ""
                 val bound = boundElements.remove(widgetId)
-                FlutterHyperswitchPlugin.widgetViews.remove(widgetId)
+                pendingConfirmCallbacks.remove(widgetId)
+                widgetViews.remove(widgetId)
+                val els = elements
                 activity.runOnUiThread {
-                    bound?.destroy()
+                    try {
+                        bound?.let { b ->
+                            els?.let { try { it.unbind(b) } catch (_: Exception) {} }
+                            b.destroy()
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
                 result.success(null)
             }
@@ -677,6 +648,51 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         }
     }
 
+    /**
+     * Registers Flutter-asset fonts with React Native's font manager so the
+     * SDK bundle can resolve `appearance.font.family`. Also accepts the
+     * legacy `appearance.typography.fontResId` key.
+     */
+    private fun registerCustomFonts(configuration: HashMap<*, *>?) {
+        val appearance = configuration?.get("appearance") as? HashMap<*, *> ?: return
+        val fontName = ((appearance["font"] as? HashMap<*, *>)?.get("family") as? String)
+            ?: ((appearance["typography"] as? HashMap<*, *>)?.get("fontResId") as? String)
+            ?: return
+
+        val fonts = arrayOf(
+            "Black", "BlackItalic", "Bold", "BoldItalic",
+            "ExtraBold", "ExtraBoldItalic", "ExtraLight", "ExtraLightItalic",
+            "Italic", "Light", "LightItalic", "Medium", "MediumItalic",
+            "Regular", "SemiBold", "SemiBoldItalic", "Thin", "ThinItalic"
+        )
+
+        val loader = FlutterInjector.instance().flutterLoader()
+
+        try {
+            val fontKey = loader.getLookupKeyForAsset("fonts/${fontName}.ttf")
+            val myTypeface = Typeface.createFromAsset(
+                activity.applicationContext.resources.assets, fontKey
+            )
+            ReactFontManager.getInstance().addCustomFont(fontName, myTypeface)
+        } catch (_: Exception) {
+            Log.w("Hyperswitch Warning", "Font not found")
+        }
+
+        for (suffix in fonts) {
+            try {
+                val fontKey = loader.getLookupKeyForAsset("fonts/${fontName}-${suffix}.ttf")
+                val myTypeface = Typeface.createFromAsset(
+                    activity.applicationContext.resources.assets, fontKey
+                )
+                ReactFontManager.getInstance().addCustomFont(
+                    fontName + if (suffix == "Regular") "" else suffix, myTypeface
+                )
+            } catch (_: Exception) {
+                Log.w("Hyperswitch Warning", "Font not found")
+            }
+        }
+    }
+
     private suspend fun resolveElementsIntent(): HashMap<String, Any> =
         suspendCoroutine { continuation ->
             channel.invokeMethod(
@@ -739,7 +755,6 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         @JvmStatic
         var paymentSheetResult: Result? = null
         var params: HashMap<String, Any> = HashMap()
-        val widgetViews = ConcurrentHashMap<String, io.hyperswitch.view.HyperswitchElement>()
 
         fun callBackHandler(result: Result, map: HashMap<String, Any>) {
             try {
@@ -816,6 +831,14 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         }
     }
 
+    /**
+     * Builds the launch props consumed by the SDK bundle's nativeJsonToRecord:
+     * only `type`, `hyperswitchConfig`, `paymentSessionConfig` and
+     * `configuration` are read. Legacy top-level keys (`from`,
+     * `publishableKey`, `customBackendUrl`, ...) are dead on the current SDK
+     * and intentionally not sent; custom endpoints ride inside
+     * `hyperswitchConfig.customEndpoints`.
+     */
     private fun buildPaymentSheetParams(): HashMap<String, Any?> {
         val publishableKey = params["publishableKey"] as? String ?: ""
         val sdkAuthorization = params["sdkAuthorization"] as? String
@@ -839,7 +862,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
             val overrideEndpoints = HashMap<String, Any?>()
             (customEndpoints?.get("overrideEndpoints") as? HashMap<*, *>)?.forEach { (key, value) ->
-                if (key != null) overrideEndpoints[key.toString()] = value
+                if (key != null && value != null) overrideEndpoints[key.toString()] = value
             }
             customBackendUrl?.let { overrideEndpoints["customBackendEndpoint"] = it }
             customLogUrl?.let { overrideEndpoints["customLoggingEndpoint"] = it }
@@ -853,16 +876,10 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
         val paymentSessionConfig = HashMap<String, Any?>()
         paymentSessionConfig["sdkAuthorization"] = sdkAuthorization
-        paymentSessionConfig["clientSecret"] = params["clientSecret"] as? String ?: ""
+        paymentSessionConfig["clientSecret"] = params["clientSecret"] as? String ?: sdkAuthorization
 
         return HashMap<String, Any?>().apply {
             put("type", "payment")
-            put("from", "flutter")
-            put("publishableKey", publishableKey)
-            put("sdkAuthorization", sdkAuthorization)
-            put("customBackendUrl", customBackendUrl)
-            put("customLoggingUrl", customLogUrl)
-            put("customLogUrl", customLogUrl)
             put("hyperswitchConfig", hyperswitchConfig)
             put("paymentSessionConfig", paymentSessionConfig)
             if (configuration != null) {

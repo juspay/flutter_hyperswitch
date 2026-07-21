@@ -107,6 +107,9 @@ class PaymentSessionConfiguration {
   Map<String, dynamic> toJson() {
     return {
       'sdkAuthorization': sdkAuthorization,
+      // The iOS plugin (and older Android plugin versions) read `clientSecret`;
+      // emit both keys so existing integrations keep working.
+      'clientSecret': sdkAuthorization,
       'configuration': configuration?.toJson(),
       'customParams': customParams,
     };
@@ -885,7 +888,12 @@ class Appearance {
       'shapes': shapes?.toJson(),
       'primaryButton': primaryButton?.toJson(),
       'locale': locale,
-      'typography': font?.toJson(),
+      // The SDK bundle reads `font` (family/scale/...); `typography` with
+      // fontResId/fontSizeSp is the legacy key still read by the iOS plugin.
+      'font': font?.toJson(),
+      'typography': font != null
+          ? {'fontResId': font.family, 'fontSizeSp': font.scale}
+          : null,
       'theme': themeToString(theme),
       'logo': logo?.toJson(),
     };
@@ -1406,8 +1414,10 @@ enum SubscriptionEvent {
   paymentMethodStatus,
   formStatus,
   paymentMethodInfoBillingAddress,
-  cvcStatus,
-  surcharge;
+
+  /// Emitted by [CvcWidget] unconditionally; listing it in
+  /// [Configuration.subscribedEvents] is not required.
+  cvcStatus;
 
   String get name {
     switch (this) {
@@ -1421,8 +1431,6 @@ enum SubscriptionEvent {
         return 'PAYMENT_METHOD_INFO_BILLING_ADDRESS';
       case SubscriptionEvent.cvcStatus:
         return 'CVC_STATUS';
-      case SubscriptionEvent.surcharge:
-        return 'SURCHARGE';
     }
   }
 }

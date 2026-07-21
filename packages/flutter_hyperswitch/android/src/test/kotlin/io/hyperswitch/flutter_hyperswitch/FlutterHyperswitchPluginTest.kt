@@ -6,7 +6,7 @@ import kotlin.test.Test
 import org.mockito.Mockito
 
 /*
- * This demonstrates a simple unit test of the Kotlin portion of this plugin's implementation.
+ * Unit tests for the Kotlin portion of this plugin's implementation.
  *
  * Once you have built the plugin's example app, you can run these tests from the command
  * line by running `./gradlew testDebugUnitTest` in the `example/android/` directory, or
@@ -15,13 +15,43 @@ import org.mockito.Mockito
 
 internal class FlutterHyperswitchPluginTest {
   @Test
-  fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
+  fun onMethodCall_unknownMethod_reportsNotImplemented() {
     val plugin = FlutterHyperswitchPlugin()
 
-    val call = MethodCall("getPlatformVersion", null)
+    val call = MethodCall("someUnknownMethod", null)
     val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
     plugin.onMethodCall(call, mockResult)
 
-    Mockito.verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE)
+    Mockito.verify(mockResult).notImplemented()
+  }
+
+  @Test
+  fun onMethodCall_updateIntent_withoutSession_reportsNotInitialised() {
+    val plugin = FlutterHyperswitchPlugin()
+
+    val call = MethodCall("updateIntent", mapOf("sdkAuthorization" to "cs_test_123"))
+    val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+    plugin.onMethodCall(call, mockResult)
+
+    val expected = hashMapOf<String, Any>(
+      "type" to "failed",
+      "message" to "Not Initialised"
+    )
+    Mockito.verify(mockResult).success(expected)
+  }
+
+  @Test
+  fun onMethodCall_updateIntent_withoutAuthorization_reportsFailure() {
+    val plugin = FlutterHyperswitchPlugin()
+
+    val call = MethodCall("updateIntent", mapOf<String, Any>())
+    val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+    plugin.onMethodCall(call, mockResult)
+
+    val expected = hashMapOf<String, Any>(
+      "type" to "failed",
+      "message" to "sdkAuthorization is required"
+    )
+    Mockito.verify(mockResult).success(expected)
   }
 }
