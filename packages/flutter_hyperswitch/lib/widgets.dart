@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/gestures.dart'
     show OneSequenceGestureRecognizer, EagerGestureRecognizer;
 import 'flutter_hyperswitch.dart';
+import 'src/widget_registry.dart';
 
 // The native payment form must win the gesture arena (e.g. inside a
 // scrollable), otherwise taps on its fields are swallowed by Flutter.
@@ -13,28 +14,40 @@ Set<Factory<OneSequenceGestureRecognizer>> _eagerGestureRecognizers() => {
   Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
 };
 
-Widget _androidPlatformView(String viewType, String widgetId) {
+Widget _hyperswitchPlatformView(String viewType, String widgetId) {
   final creationParams = <String, dynamic>{'widgetId': widgetId};
-  return PlatformViewLink(
+  if (Platform.isAndroid) {
+    return PlatformViewLink(
+      viewType: viewType,
+      surfaceFactory: (context, controller) {
+        return AndroidViewSurface(
+          controller: controller as AndroidViewController,
+          gestureRecognizers: _eagerGestureRecognizers(),
+          hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+        );
+      },
+      onCreatePlatformView: (params) {
+        return PlatformViewsService.initExpensiveAndroidView(
+          id: params.id,
+          viewType: viewType,
+          layoutDirection: TextDirection.ltr,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+        )
+          ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+          ..addOnPlatformViewCreatedListener(
+            (id) => WidgetRegistry.onViewCreated(widgetId, id),
+          )
+          ..create();
+      },
+    );
+  }
+  return UiKitView(
     viewType: viewType,
-    surfaceFactory: (context, controller) {
-      return AndroidViewSurface(
-        controller: controller as AndroidViewController,
-        gestureRecognizers: _eagerGestureRecognizers(),
-        hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-      );
-    },
-    onCreatePlatformView: (params) {
-      return PlatformViewsService.initExpensiveAndroidView(
-        id: params.id,
-        viewType: viewType,
-        layoutDirection: TextDirection.ltr,
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
-      )
-        ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-        ..create();
-    },
+    creationParams: creationParams,
+    creationParamsCodec: const StandardMessageCodec(),
+    gestureRecognizers: _eagerGestureRecognizers(),
+    onPlatformViewCreated: (id) => WidgetRegistry.onViewCreated(widgetId, id),
   );
 }
 
@@ -45,14 +58,7 @@ class _PlatformPaymentElement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isAndroid) {
-      return _androidPlatformView('hyperswitch_payment_element', widgetId);
-    }
-    // TODO(ios): restore UiKitView once the iOS plugin registers the
-    // 'hyperswitch_payment_element' platform view factory.
-    throw UnsupportedError(
-      'PaymentElement is currently supported on Android only',
-    );
+    return _hyperswitchPlatformView('hyperswitch_payment_element', widgetId);
   }
 }
 
@@ -63,12 +69,7 @@ class _PlatformCvcWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isAndroid) {
-      return _androidPlatformView('hyperswitch_cvc_widget', widgetId);
-    }
-    // TODO(ios): restore UiKitView once the iOS plugin registers the
-    // 'hyperswitch_cvc_widget' platform view factory.
-    throw UnsupportedError('CvcWidget is currently supported on Android only');
+    return _hyperswitchPlatformView('hyperswitch_cvc_widget', widgetId);
   }
 }
 
@@ -98,6 +99,7 @@ class _PaymentElementState extends State<PaymentElement> {
   @override
   void initState() {
     super.initState();
+    WidgetRegistry.register(widget.widgetId, WidgetKind.paymentElement);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _createElement();
     });
@@ -121,6 +123,7 @@ class _PaymentElementState extends State<PaymentElement> {
 
   @override
   void dispose() {
+    WidgetRegistry.unregister(widget.widgetId);
     widget.elements.destroyElement(widget.widgetId);
     super.dispose();
   }
@@ -153,6 +156,7 @@ class _CvcWidgetState extends State<CvcWidget> {
   @override
   void initState() {
     super.initState();
+    WidgetRegistry.register(widget.widgetId, WidgetKind.cvcWidget);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _createElement();
     });
@@ -174,6 +178,7 @@ class _CvcWidgetState extends State<CvcWidget> {
 
   @override
   void dispose() {
+    WidgetRegistry.unregister(widget.widgetId);
     widget.elements.destroyElement(widget.widgetId);
     super.dispose();
   }

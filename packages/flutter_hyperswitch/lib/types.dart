@@ -107,32 +107,6 @@ class PaymentSessionConfiguration {
   Map<String, dynamic> toJson() {
     return {
       'sdkAuthorization': sdkAuthorization,
-      // The iOS plugin (and older Android plugin versions) read `clientSecret`;
-      // emit both keys so existing integrations keep working.
-      'clientSecret': sdkAuthorization,
-      'configuration': configuration?.toJson(),
-      'customParams': customParams,
-    };
-  }
-}
-
-/// Backward-compatible alias for older Flutter SDK integrations.
-///
-/// Prefer [PaymentSessionConfiguration] with `sdkAuthorization` for new code.
-class PaymentMethodParams extends PaymentSessionConfiguration {
-  PaymentMethodParams({
-    required String clientSecret,
-    super.configuration,
-    super.customParams,
-  }) : super(sdkAuthorization: clientSecret);
-
-  String get clientSecret => sdkAuthorization;
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'sdkAuthorization': sdkAuthorization,
-      'clientSecret': sdkAuthorization,
       'configuration': configuration?.toJson(),
       'customParams': customParams,
     };
@@ -888,12 +862,7 @@ class Appearance {
       'shapes': shapes?.toJson(),
       'primaryButton': primaryButton?.toJson(),
       'locale': locale,
-      // The SDK bundle reads `font` (family/scale/...); `typography` with
-      // fontResId/fontSizeSp is the legacy key still read by the iOS plugin.
       'font': font?.toJson(),
-      'typography': font != null
-          ? {'fontResId': font.family, 'fontSizeSp': font.scale}
-          : null,
       'theme': themeToString(theme),
       'logo': logo?.toJson(),
     };
@@ -905,7 +874,7 @@ class Appearance {
       shapes: json['shapes'] != null ? Shapes.fromJson(json['shapes']) : null,
       primaryButton: json['primaryButton'] != null ? PrimaryButton.fromJson(json['primaryButton']) : null,
       locale: json['locale'],
-      font: json['typography'] != null ? Font.fromJson(json['typography']) : (json['font'] != null ? Font.fromJson(json['font']) : null),
+      font: json['font'] != null ? Font.fromJson(json['font']) : null,
       theme: stringToTheme(json['theme']),
       logo: json['logo'] != null ? LogoCustomization.fromJson(json['logo']) : null,
     );
@@ -943,8 +912,8 @@ class Font {
 
   factory Font.fromJson(Map<String, dynamic> json) {
     return Font(
-      family: json['family'] ?? json['fontResId'],
-      scale: json['scale'] ?? json['fontSizeSp'],
+      family: json['family'],
+      scale: json['scale'],
       headingTextSizeAdjust: json['headingTextSizeAdjust'],
       subHeadingTextSizeAdjust: json['subHeadingTextSizeAdjust'],
       placeholderTextSizeAdjust: json['placeholderTextSizeAdjust'],

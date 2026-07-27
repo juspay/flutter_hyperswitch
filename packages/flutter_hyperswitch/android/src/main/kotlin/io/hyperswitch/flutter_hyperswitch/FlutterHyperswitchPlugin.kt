@@ -161,9 +161,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
                 registerCustomFonts(params["configuration"] as? HashMap<*, *>)
 
-                val sdkAuthorization = params["sdkAuthorization"] as String?
-                    ?: params["clientSecret"] as String?
-                    ?: ""
+                val sdkAuthorization = params["sdkAuthorization"] as String? ?: ""
                 params["sdkAuthorization"] = sdkAuthorization
 
                 if (sdkAuthorization.isEmpty()) {
@@ -340,9 +338,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     params.putAll(p)
                 }
                 registerCustomFonts(params["configuration"] as? HashMap<*, *>)
-                val sdkAuthorization = params["sdkAuthorization"] as String?
-                    ?: params["clientSecret"] as String?
-                    ?: ""
+                val sdkAuthorization = params["sdkAuthorization"] as String? ?: ""
                 if (sdkAuthorization.isEmpty()) {
                     val map = HashMap<String, Any>()
                     map["type"] = "failed"
@@ -567,6 +563,8 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 call.argument<HashMap<String, Any>>("params")?.let {
                     params.putAll(it)
                 }
+                // The sheet configuration (and its font) often arrives only here.
+                registerCustomFonts(params["configuration"] as? HashMap<*, *>)
                 val pk = params["publishableKey"]
                 if (pk == null) {
                     val map = HashMap<String, Any>()
@@ -649,14 +647,17 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
 
     /**
-     * Registers Flutter-asset fonts with React Native's font manager so the
-     * SDK bundle can resolve `appearance.font.family`. Also accepts the
-     * legacy `appearance.typography.fontResId` key.
+     * Registers Flutter-asset fonts so the SDK bundle can resolve
+     * `appearance.font.family`.
+     *
+     * The family may contain spaces (e.g. "Press Start 2P") while the font
+     * files conventionally don't ("PressStart2P-Regular.ttf"), so lookup also
+     * tries a space-stripped file name. Fonts are registered under the
+     * configured family string either way.
      */
     private fun registerCustomFonts(configuration: HashMap<*, *>?) {
         val appearance = configuration?.get("appearance") as? HashMap<*, *> ?: return
-        val fontName = ((appearance["font"] as? HashMap<*, *>)?.get("family") as? String)
-            ?: ((appearance["typography"] as? HashMap<*, *>)?.get("fontResId") as? String)
+        val fontName = (appearance["font"] as? HashMap<*, *>)?.get("family") as? String
             ?: return
 
         val fonts = arrayOf(
@@ -667,29 +668,32 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         )
 
         val loader = FlutterInjector.instance().flutterLoader()
+        val fileBases = linkedSetOf(fontName, fontName.replace(" ", ""))
 
-        try {
-            val fontKey = loader.getLookupKeyForAsset("fonts/${fontName}.ttf")
-            val myTypeface = Typeface.createFromAsset(
-                activity.applicationContext.resources.assets, fontKey
-            )
-            ReactFontManager.getInstance().addCustomFont(fontName, myTypeface)
-        } catch (_: Exception) {
-            Log.w("Hyperswitch Warning", "Font not found")
+        fun typefaceForVariant(suffix: String?): Typeface? {
+            for (base in fileBases) {
+                val fileName = if (suffix == null) "$base.ttf" else "$base-$suffix.ttf"
+                try {
+                    val fontKey = loader.getLookupKeyForAsset("fonts/$fileName")
+                    return Typeface.createFromAsset(
+                        activity.applicationContext.resources.assets, fontKey
+                    )
+                } catch (_: Exception) {
+                }
+            }
+            return null
         }
 
+        typefaceForVariant(null)?.let {
+            ReactFontManager.getInstance().addCustomFont(fontName, it)
+        } ?: Log.w("Hyperswitch Warning", "Font not found: $fontName")
+
         for (suffix in fonts) {
-            try {
-                val fontKey = loader.getLookupKeyForAsset("fonts/${fontName}-${suffix}.ttf")
-                val myTypeface = Typeface.createFromAsset(
-                    activity.applicationContext.resources.assets, fontKey
-                )
+            typefaceForVariant(suffix)?.let {
                 ReactFontManager.getInstance().addCustomFont(
-                    fontName + if (suffix == "Regular") "" else suffix, myTypeface
+                    fontName + if (suffix == "Regular") "" else suffix, it
                 )
-            } catch (_: Exception) {
-                Log.w("Hyperswitch Warning", "Font not found")
-            }
+            } ?: Log.w("Hyperswitch Warning", "Font not found: $fontName-$suffix")
         }
     }
 
@@ -832,18 +836,13 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
 
     /**
-     * Builds the launch props consumed by the SDK bundle's nativeJsonToRecord:
-     * only `type`, `hyperswitchConfig`, `paymentSessionConfig` and
-     * `configuration` are read. Legacy top-level keys (`from`,
-     * `publishableKey`, `customBackendUrl`, ...) are dead on the current SDK
-     * and intentionally not sent; custom endpoints ride inside
-     * `hyperswitchConfig.customEndpoints`.
+     * Launch props for the SDK bundle, which reads only `type`,
+     * `hyperswitchConfig`, `paymentSessionConfig` and `configuration`;
+     * custom endpoints ride inside `hyperswitchConfig.customEndpoints`.
      */
     private fun buildPaymentSheetParams(): HashMap<String, Any?> {
         val publishableKey = params["publishableKey"] as? String ?: ""
-        val sdkAuthorization = params["sdkAuthorization"] as? String
-            ?: params["clientSecret"] as? String
-            ?: ""
+        val sdkAuthorization = params["sdkAuthorization"] as? String ?: ""
         val customBackendUrl = params["customBackendUrl"] as? String
         val customLogUrl = params["customLogUrl"] as? String
         val configuration = params["configuration"] as? HashMap<*, *>
@@ -876,7 +875,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
 
         val paymentSessionConfig = HashMap<String, Any?>()
         paymentSessionConfig["sdkAuthorization"] = sdkAuthorization
-        paymentSessionConfig["clientSecret"] = params["clientSecret"] as? String ?: sdkAuthorization
+        paymentSessionConfig["clientSecret"] = sdkAuthorization
 
         return HashMap<String, Any?>().apply {
             put("type", "payment")

@@ -40,9 +40,98 @@ class MyApp extends StatelessWidget {
     );
   }
 
-  static String get _endpoint => Platform.isAndroid
-      ? "http://10.0.2.2:5252"
-      : "http://localhost:5252";
+  static String get _endpoint =>
+      Platform.isAndroid ? "http://10.0.2.2:5252" : "http://localhost:5252";
+}
+
+/// Shared neon appearance used by both the payment sheet and the widgets.
+Appearance _buildNeonAppearance({LogoCustomization? logo}) {
+  return Appearance(
+    theme: Theme.dark,
+    // iOS resolves fonts by their embedded family name — for PressStart2P
+    // that's "Press Start 2P"; the plugins also try the space-stripped file
+    // name (PressStart2P-*.ttf) when locating the asset.
+    font: Font(
+      family: 'Montserrat',
+      scale: 0.8,
+      headingTextSizeAdjust: 0.9,
+      buttonTextSizeAdjust: 0.85,
+    ),
+    colors: DynamicColors(
+      dark: ColorsObject(
+        primary: '#FF00FF',
+        background: '#0A0A0A',
+        overlay: '#000000CC',
+        secondaryText: '#FF00FF',
+        selectedComponentBackground: '#1A0033',
+        selectedComponentBorder: '#FF00FF',
+        primaryText: '#00FFFF',
+        componentBackground: '#111111',
+        componentBorder: '#FF00FF',
+        componentDivider: '#330033',
+        componentText: '#00FFFF',
+        placeholderText: '#660066',
+        icon: '#FF00FF',
+        error: '#FF0000',
+        loaderBackground: '#0A0A0A',
+        loaderForeground: '#FF00FF',
+        selectedComponentDivider: '#660066',
+        selectedComponentText: '#00FFFF',
+        selectedComponentBorderWidth: 2,
+      ),
+      light: ColorsObject(
+        primary: '#00FFFF',
+        background: '#FFEE00',
+        overlay: '#00000033',
+        secondaryText: '#FF00FF',
+        selectedComponentBackground: '#FFDD00',
+        selectedComponentBorder: '#FF00FF',
+        primaryText: '#0000FF',
+        componentBackground: '#FFFF00',
+        componentBorder: '#FF00FF',
+        componentDivider: '#FF00FF',
+        componentText: '#0000FF',
+        placeholderText: '#FF99FF',
+        icon: '#FF00FF',
+        error: '#FF0000',
+        loaderBackground: '#FFEE00',
+        loaderForeground: '#FF00FF',
+        selectedComponentDivider: '#FF00FF',
+        selectedComponentText: '#0000FF',
+        selectedComponentBorderWidth: 2,
+      ),
+    ),
+    shapes: Shapes(
+      borderRadius: 0,
+      borderWidth: 2,
+      inputHeight: 64,
+      gap: 16,
+      shadow: Shadow(
+        color: '#FF00FF',
+        opacity: 0.5,
+        blurRadius: 8,
+        intensity: 0.7,
+        offset: Offset(x: 2, y: 2),
+      ),
+    ),
+    primaryButton: PrimaryButton(
+      height: 56,
+      shapes: Shapes(borderRadius: 0),
+      colors: PrimaryButtonColors(
+        light: PrimaryButtonColorType(
+          background: '#FF00FF',
+          text: '#00FFFF',
+          border: '#00FFFF',
+        ),
+        dark: PrimaryButtonColorType(
+          background: '#FF00FF',
+          text: '#00FFFF',
+          border: '#00FFFF',
+        ),
+      ),
+    ),
+    logo: logo,
+  );
 }
 
 Configuration _buildPaymentSheetConfiguration() {
@@ -85,47 +174,7 @@ Configuration _buildPaymentSheetConfiguration() {
       cvcIcon: CvcIconDisplay.hidden,
       cardBrandIcon: CardBrandIconDisplay.standard,
     ),
-    appearance: Appearance(
-      theme: Theme.minimal,
-      font: Font(
-        family: "Montserrat",
-        scale: 1.0,
-        headingTextSizeAdjust: 1.0,
-        buttonTextSizeAdjust: 1.0,
-      ),
-      colors: DynamicColors(
-        dark: ColorsObject(
-          primary: "#8DBD00",
-          background: "#F5F8F9",
-          overlay: "#00000066",
-          selectedComponentBackground: "#E0E0E0",
-          selectedComponentBorder: "#CCCCCC",
-        ),
-        light: ColorsObject(
-          primary: "#8DBD00",
-          background: "#F5F8F9",
-          overlay: "#00000033",
-          selectedComponentBackground: "#F0F0F0",
-          selectedComponentBorder: "#DDDDDD",
-        ),
-      ),
-      shapes: Shapes(borderRadius: 8.0, inputHeight: 48.0, gap: 12.0),
-      primaryButton: PrimaryButton(
-        shapes: Shapes(borderRadius: 32.0),
-        height: 48.0,
-        colors: PrimaryButtonColors(
-          light: PrimaryButtonColorType(
-            background: "#8DBD00",
-            text: "#FFFFFF",
-            border: "#8DBD00",
-          ),
-          dark: PrimaryButtonColorType(
-            background: "#8DBD00",
-            text: "#FFFFFF",
-            border: "#8DBD00",
-          ),
-        ),
-      ),
+    appearance: _buildNeonAppearance(
       logo: LogoCustomization(
         borderRadius: 8.0,
         colors: LogoColorType(
@@ -200,30 +249,81 @@ Configuration _buildPaymentElementConfiguration() {
         groupingBehavior: GroupingBehavior(displayInSeparateScreen: false),
       ),
     ),
-    appearance: Appearance(
-      theme: Theme.light,
-      shapes: Shapes(
-        borderRadius: 16.0,
-        borderWidth: 1.0,
-        inputHeight: 56.0,
-        gap: 24.0,
-        shadow: Shadow(
-          color: '#000000',
-          opacity: 0,
-          blurRadius: 0,
-          intensity: 0,
-          offset: Offset(x: 0, y: 0),
-        ),
-      ),
-      primaryButton: PrimaryButton(height: 56.0),
-    ),
+    appearance: _buildNeonAppearance(),
   );
 }
 
 Configuration _buildCvcWidgetConfiguration() {
   return Configuration(
-    placeholder: Placeholder(cvv: '123'),
+    placeholder: Placeholder(cvv: 'CVC'),
     hideConfirmButton: true,
+    appearance: Appearance(
+      theme: Theme.dark,
+      font: Font(family: 'Montserrat', scale: 0.7),
+      colors: DynamicColors(
+        dark: ColorsObject(
+          primary: '#00FFFF',
+          background: '#1A0033',
+          overlay: '#000000CC',
+          primaryText: '#00FFFF',
+          secondaryText: '#FF00FF',
+          error: '#FF0000',
+          componentBackground: '#220044',
+          componentBorder: '#00FFFF',
+          componentText: '#00FFFF',
+          placeholderText: '#660066',
+          icon: '#00FFFF',
+          selectedComponentBackground: '#330066',
+          selectedComponentBorder: '#00FFFF',
+          selectedComponentBorderWidth: 2,
+        ),
+        light: ColorsObject(
+          primary: '#FF00FF',
+          background: '#00FFFF',
+          overlay: '#00000033',
+          primaryText: '#0000FF',
+          secondaryText: '#FF00FF',
+          error: '#FF0000',
+          componentBackground: '#00DDFF',
+          componentBorder: '#FF00FF',
+          componentText: '#0000FF',
+          placeholderText: '#FF99FF',
+          icon: '#FF00FF',
+          selectedComponentBackground: '#FFDDFF',
+          selectedComponentBorder: '#FF00FF',
+          selectedComponentBorderWidth: 2,
+        ),
+      ),
+      shapes: Shapes(
+        borderRadius: 0,
+        borderWidth: 2,
+        inputHeight: 56,
+        gap: 12,
+        shadow: Shadow(
+          color: '#00FFFF',
+          opacity: 0.4,
+          blurRadius: 6,
+          intensity: 0.6,
+          offset: Offset(x: 1, y: 1),
+        ),
+      ),
+      primaryButton: PrimaryButton(
+        height: 48,
+        shapes: Shapes(borderRadius: 0),
+        colors: PrimaryButtonColors(
+          light: PrimaryButtonColorType(
+            background: '#00FFFF',
+            text: '#FF00FF',
+            border: '#FF00FF',
+          ),
+          dark: PrimaryButtonColorType(
+            background: '#00FFFF',
+            text: '#FF00FF',
+            border: '#FF00FF',
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -289,11 +389,14 @@ class _PaymentSheetTabState extends State<PaymentSheetTab> {
         _sessionId!,
         _buildPaymentSheetConfiguration(),
         (event) {
-          debugPrint("PaymentEvent: ${event.eventName} payload=${event.payload}");
+          debugPrint(
+            "PaymentEvent: ${event.eventName} payload=${event.payload}",
+          );
         },
       );
       setState(() {
-        _statusText = "${result.status.name}\n${result.message?.name ?? result.error.message}";
+        _statusText =
+            "${result.status.name}\n${result.message?.name ?? result.error.message}";
       });
       if (result.status != Status.cancelled) {
         _init();
@@ -320,7 +423,9 @@ class _PaymentSheetTabState extends State<PaymentSheetTab> {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _isInitialized ? _presentSheet : null,
-              child: Text(_isInitialized ? "Open Payment Sheet" : "Loading ..."),
+              child: Text(
+                _isInitialized ? "Open Payment Sheet" : "Loading ...",
+              ),
             ),
             const SizedBox(height: 16),
             OutlinedButton(
@@ -397,7 +502,9 @@ class _HeadlessTabState extends State<HeadlessTab> {
       _savedSession = await _hyper.getCustomerSavedPaymentMethods(
         Session(sdkAuth),
       );
-      final pm = await _hyper.getCustomerLastUsedPaymentMethodData(_savedSession!);
+      final pm = await _hyper.getCustomerLastUsedPaymentMethodData(
+        _savedSession!,
+      );
       if (pm is PaymentMethod) {
         if (pm.paymentMethod == PaymentMethodType.card) {
           final card = pm.card!;
@@ -466,7 +573,9 @@ class _HeadlessTabState extends State<HeadlessTab> {
         Session(_sdkAuthorization!),
         _buildPaymentSheetConfiguration(),
         (event) {
-          debugPrint("PaymentEvent: ${event.eventName} payload=${event.payload}");
+          debugPrint(
+            "PaymentEvent: ${event.eventName} payload=${event.payload}",
+          );
         },
       );
       setState(() {
@@ -527,7 +636,9 @@ class _HeadlessTabState extends State<HeadlessTab> {
                   widgetId: _cvcWidgetId,
                   configuration: _buildCvcWidgetConfiguration(),
                   onCvcEvent: (event) {
-                    debugPrint("CVCWidget event: ${event.type} payload=${event.payload}");
+                    debugPrint(
+                      "CVCWidget event: ${event.type} payload=${event.payload}",
+                    );
                   },
                 ),
               ),
@@ -546,7 +657,10 @@ class _HeadlessTabState extends State<HeadlessTab> {
                 ),
               const SizedBox(height: 16),
               if (_resultText.isNotEmpty)
-                Text(_resultText, style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  _resultText,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
             ],
             if (_statusText.isNotEmpty)
               Padding(
@@ -693,8 +807,8 @@ class _WidgetsTabState extends State<WidgetsTab> {
                 _isInitializing
                     ? "Initializing..."
                     : _elementsReady
-                        ? "Re-initialize"
-                        : "Initialize Elements",
+                    ? "Re-initialize"
+                    : "Initialize Elements",
               ),
             ),
             const SizedBox(height: 12),

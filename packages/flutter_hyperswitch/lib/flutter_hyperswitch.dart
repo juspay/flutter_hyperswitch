@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/services.dart';
 import 'flutter_hyperswitch_platform_interface.dart';
+import 'src/widget_registry.dart';
 import 'types.dart';
 export 'types.dart';
 export 'widgets.dart';
@@ -18,6 +18,21 @@ const _eventChannel = EventChannel('flutter_hyperswitch/events');
 final Stream<dynamic> _hyperswitchEvents = _eventChannel.receiveBroadcastStream();
 
 typedef IntentResolver = Future<PaymentSessionConfiguration> Function();
+
+/// Resolves an optional CVC widget id: null/empty means "no widget"; an id
+/// that is not a mounted [CvcWidget] throws NO_WIDGET rather than silently
+/// confirming without the CVC.
+String? _resolveCvcWidgetId(String? widgetId) {
+  if (widgetId == null || widgetId.isEmpty) return null;
+  if (WidgetRegistry.kindOf(widgetId) != WidgetKind.cvcWidget ||
+      !WidgetRegistry.isMounted(widgetId)) {
+    throw HyperswitchException(
+      code: 'NO_WIDGET',
+      message: "CvcWidget '$widgetId' not found or not mounted",
+    );
+  }
+  return widgetId;
+}
 
 /// A class providing methods to interact with Hyperswitch functionality.
 class FlutterHyperswitch {
@@ -151,13 +166,15 @@ class FlutterHyperswitch {
       );
     }
     try {
+      final resolvedWidgetId = _resolveCvcWidgetId(widgetId);
       _sessionMap[session.sessionData] = Session(session.sessionData);
       final response =
           await FlutterHyperswitchPlatform.instance
-              .confirmWithCustomerDefaultPaymentMethod(widgetId) ??
+              .confirmWithCustomerDefaultPaymentMethod(resolvedWidgetId) ??
           {};
       return PaymentResult.fromMap(response);
     } catch (error) {
+      if (error is HyperswitchException) return Future.error(error);
       return Future.error(
         HyperswitchException(
           code: "error",
@@ -228,13 +245,15 @@ class FlutterHyperswitch {
       );
     }
     try {
+      final resolvedWidgetId = _resolveCvcWidgetId(widgetId);
       _sessionMap[session.sessionData] = Session(session.sessionData);
       final response =
           await FlutterHyperswitchPlatform.instance
-              .confirmWithLastUsedPaymentMethod(widgetId) ??
+              .confirmWithLastUsedPaymentMethod(resolvedWidgetId) ??
           {};
       return PaymentResult.fromMap(response);
     } catch (error) {
+      if (error is HyperswitchException) return Future.error(error);
       return Future.error(
         HyperswitchException(
           code: "error",
@@ -361,15 +380,6 @@ class FlutterHyperswitch {
   }
 
   Future<Elements> elements(PaymentSessionConfiguration params) async {
-    if (!Platform.isAndroid) {
-      return Future.error(
-        HyperswitchException(
-          code: "unsupported_platform",
-          message:
-              "Elements and widget APIs are currently supported on Android only",
-        ),
-      );
-    }
     try {
       final response = await FlutterHyperswitchPlatform.instance
           .elements(params.toJson());
@@ -591,6 +601,15 @@ class Elements {
   }
 
   Future<PaymentResult> confirmPayment(String widgetId) async {
+    if (WidgetRegistry.kindOf(widgetId) != WidgetKind.paymentElement ||
+        !WidgetRegistry.isMounted(widgetId)) {
+      return Future.error(
+        HyperswitchException(
+          code: 'NO_WIDGET',
+          message: "PaymentElement '$widgetId' not found or not mounted",
+        ),
+      );
+    }
     try {
       final response =
           await FlutterHyperswitchPlatform.instance.confirmPayment(widgetId) ??
@@ -626,6 +645,7 @@ class Elements {
   Future<void> destroyElement(String widgetId) async {
     try {
       await FlutterHyperswitchPlatform.instance.destroyElement(widgetId);
+      WidgetRegistry.unregister(widgetId);
       _paymentElementControllers.remove(widgetId);
       _cvcWidgetControllers.remove(widgetId);
     } catch (error) {
@@ -643,10 +663,11 @@ class Elements {
   }) async {
     try {
       final response = await FlutterHyperswitchPlatform.instance
-          .confirmWithCustomerDefaultPaymentMethod(widgetId) ??
+          .confirmWithCustomerDefaultPaymentMethod(_resolveCvcWidgetId(widgetId)) ??
           {};
       return PaymentResult.fromMap(response);
     } catch (error) {
+      if (error is HyperswitchException) return Future.error(error);
       return Future.error(
         HyperswitchException(
           code: "error",
@@ -661,10 +682,11 @@ class Elements {
   }) async {
     try {
       final response = await FlutterHyperswitchPlatform.instance
-          .confirmWithLastUsedPaymentMethod(widgetId) ??
+          .confirmWithLastUsedPaymentMethod(_resolveCvcWidgetId(widgetId)) ??
           {};
       return PaymentResult.fromMap(response);
     } catch (error) {
+      if (error is HyperswitchException) return Future.error(error);
       return Future.error(
         HyperswitchException(
           code: "error",
