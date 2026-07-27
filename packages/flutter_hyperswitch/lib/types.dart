@@ -1,13 +1,18 @@
-import 'dart:ffi';
 
 /// A class representing parameters for the Hyperswitch configuration.
 class HyperConfig {
   String publishableKey;
+  String? profileId;
+  HyperswitchEnvironment? environment;
+  CustomEndpointConfiguration? customConfig;
   String? customBackendUrl;
   String? customLogUrl;
 
   HyperConfig({
     required this.publishableKey,
+    this.profileId,
+    this.environment,
+    this.customConfig,
     this.customBackendUrl,
     this.customLogUrl,
   });
@@ -15,27 +20,93 @@ class HyperConfig {
   Map<String, dynamic> toJson() {
     return {
       'publishableKey': publishableKey,
+      'profileId': profileId,
+      'environment': environmentToString(environment),
+      'customEndpoints': customConfig?.toJson(),
       'customBackendUrl': customBackendUrl,
       'customLogUrl': customLogUrl,
     };
   }
 }
 
-/// A class representing parameters for payment method initialization.
-class PaymentMethodParams {
-  String clientSecret;
+/// Enum representing Hyperswitch environments.
+enum HyperswitchEnvironment { production, sandbox, integ }
+
+String environmentToString(HyperswitchEnvironment? environment) {
+  switch (environment) {
+    case HyperswitchEnvironment.sandbox:
+      return "SANDBOX";
+    case HyperswitchEnvironment.integ:
+      return "INTEG";
+    case HyperswitchEnvironment.production:
+    case null:
+      return "PROD";
+  }
+}
+
+/// A class representing custom endpoint overrides for Hyperswitch.
+class OverrideEndpoints {
+  String? customBackendEndpoint;
+  String? customLoggingEndpoint;
+  String? customAssetEndpoint;
+  String? customSDKConfigEndpoint;
+  String? customConfirmEndpoint;
+  String? customAirborneEndpoint;
+
+  OverrideEndpoints({
+    this.customBackendEndpoint,
+    this.customLoggingEndpoint,
+    this.customAssetEndpoint,
+    this.customSDKConfigEndpoint,
+    this.customConfirmEndpoint,
+    this.customAirborneEndpoint,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'customBackendEndpoint': customBackendEndpoint,
+      'customLoggingEndpoint': customLoggingEndpoint,
+      'customAssetEndpoint': customAssetEndpoint,
+      'customSDKConfigEndpoint': customSDKConfigEndpoint,
+      'customConfirmEndpoint': customConfirmEndpoint,
+      'customAirborneEndpoint': customAirborneEndpoint,
+    };
+  }
+}
+
+/// A class representing custom endpoint configuration for Hyperswitch.
+class CustomEndpointConfiguration {
+  OverrideEndpoints? overrideEndpoints;
+  String? commonEndpoint;
+
+  CustomEndpointConfiguration({this.overrideEndpoints, this.commonEndpoint});
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overrideEndpoints': overrideEndpoints?.toJson(),
+      'commonEndpoint': commonEndpoint,
+    };
+  }
+}
+
+/// A class representing payment session initialization options.
+class PaymentSessionConfiguration {
+  String sdkAuthorization;
+
+  /// Deprecated: pass this to `presentPaymentSheet(session, configuration)`
+  /// instead. Kept so existing Flutter merchants do not break.
   Configuration? configuration;
   Map<String, dynamic>? customParams;
 
-  PaymentMethodParams({
-    required this.clientSecret,
+  PaymentSessionConfiguration({
+    required this.sdkAuthorization,
     this.configuration,
     this.customParams,
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'clientSecret': clientSecret,
+      'sdkAuthorization': sdkAuthorization,
       'configuration': configuration?.toJson(),
       'customParams': customParams,
     };
@@ -61,6 +132,24 @@ class Configuration {
   String? netceteraSDKApiKey;
   bool? disableBranding;
   bool? defaultView;
+  bool? displayPayButton;
+  bool? stickyPayButton;
+  bool? preloadCardElement;
+  String? locale;
+  List<SubscriptionEvent>? subscribedEvents;
+  RedirectionInfo? redirectionInfo;
+  bool? alwaysSendCustomerAcceptance;
+  bool? opensCardScannerAutomatically;
+  List<String>? paymentMethodOrder;
+  bool? splitCardFields;
+  WalletButtonsConfiguration? walletButtonsConfiguration;
+  List<PaymentMethodConfig>? paymentMethodsConfig;
+  PaymentMethodLayout? paymentMethodLayout;
+  String? paymentSheetHeaderText;
+  String? savedPaymentScreenHeaderText;
+  String? primaryButtonColor;
+  bool? enablePartialLoading;
+  bool? hideConfirmButton;
 
   Configuration({
     this.appearance,
@@ -80,6 +169,24 @@ class Configuration {
     this.netceteraSDKApiKey,
     this.disableBranding,
     this.defaultView,
+    this.displayPayButton,
+    this.stickyPayButton,
+    this.preloadCardElement,
+    this.locale,
+    this.subscribedEvents,
+    this.redirectionInfo,
+    this.alwaysSendCustomerAcceptance,
+    this.opensCardScannerAutomatically,
+    this.paymentMethodOrder,
+    this.splitCardFields,
+    this.walletButtonsConfiguration,
+    this.paymentMethodsConfig,
+    this.paymentMethodLayout,
+    this.paymentSheetHeaderText,
+    this.savedPaymentScreenHeaderText,
+    this.primaryButtonColor,
+    this.enablePartialLoading,
+    this.hideConfirmButton,
   });
 
   Map<String, dynamic> toJson() {
@@ -91,7 +198,7 @@ class Configuration {
       'merchantDisplayName': merchantDisplayName,
       'primaryButtonLabel': primaryButtonLabel,
       'customer': customer?.toJson(),
-      'defaultBillingDetails': defaultBillingDetails?.toJson(),
+      'billingDetails': defaultBillingDetails?.toJson(),
       'shippingDetails': shippingDetails?.toJson(),
       'placeholder': placeholder?.toJson(),
       'displaySavedPaymentMethodsCheckbox': displaySavedPaymentMethodsCheckbox,
@@ -102,6 +209,266 @@ class Configuration {
       'netceteraSDKApiKey': netceteraSDKApiKey,
       'disableBranding': disableBranding,
       'defaultView': defaultView,
+      'displayPayButton': displayPayButton,
+      'stickyPayButton': stickyPayButton,
+      'preloadCardElement': preloadCardElement,
+      'locale': locale,
+      'subscribedEvents': subscribedEvents?.map((e) => e.name).toList(),
+      'redirectionInfo': redirectionInfo?.name,
+      'alwaysSendCustomerAcceptance': alwaysSendCustomerAcceptance,
+      'opensCardScannerAutomatically': opensCardScannerAutomatically,
+      'paymentMethodOrder': paymentMethodOrder,
+      'splitCardFields': splitCardFields,
+      'walletButtonsConfiguration': walletButtonsConfiguration?.toJson(),
+      'paymentMethodsConfig': paymentMethodsConfig
+          ?.map((e) => e.toJson())
+          .toList(),
+      'paymentMethodLayout': paymentMethodLayout?.toJson(),
+      'paymentSheetHeaderText': paymentSheetHeaderText,
+      'savedPaymentScreenHeaderText': savedPaymentScreenHeaderText,
+      'primaryButtonColor': primaryButtonColor,
+      'enablePartialLoading': enablePartialLoading,
+      'hideConfirmButton': hideConfirmButton,
+    };
+  }
+}
+
+/// Enum representing visibility options for wallet buttons.
+enum WalletVisibility { shown, hidden }
+
+/// Enum representing visibility of redirection info text.
+enum RedirectionInfo { shown, hidden }
+
+/// Enum representing PayPal button types.
+enum PayPalButtonType { paypal, checkout, buynow, pay }
+
+/// Enum representing PayPal button sizes.
+enum PayPalButtonSize { small, medium, large }
+
+/// Enum representing PayPal button style colors.
+enum PayPalButtonStyleType { gold, blue, white, black, silver }
+
+/// A class representing PayPal button style.
+class PayPalButtonStyle {
+  PayPalButtonStyleType light;
+  PayPalButtonStyleType dark;
+
+  PayPalButtonStyle({required this.light, required this.dark});
+
+  Map<String, dynamic> toJson() {
+    return {'light': light.name, 'dark': dark.name};
+  }
+}
+
+/// A class representing Google Pay wallet button configuration.
+class GooglePayConfiguration {
+  WalletVisibility? visibility;
+  GPayButtonType? buttonType;
+  GPayButtonStyle? buttonStyle;
+
+  GooglePayConfiguration({
+    this.visibility,
+    this.buttonType,
+    this.buttonStyle,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'visibility': visibility?.name,
+      'buttonType': buttonType?.name.toUpperCase(),
+      'buttonStyle': buttonStyle?.toJson(),
+    };
+  }
+}
+
+/// A class representing Apple Pay wallet button configuration.
+class ApplePayConfiguration {
+  WalletVisibility? visibility;
+  ApplePayButtonType? buttonType;
+  ApplePayButtonStyle? buttonStyle;
+
+  ApplePayConfiguration({
+    this.visibility,
+    this.buttonType,
+    this.buttonStyle,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'visibility': visibility?.name,
+      'buttonType': buttonType?.name,
+      'buttonStyle': buttonStyle?.toJson(),
+    };
+  }
+}
+
+/// A class representing PayPal wallet button configuration.
+class PayPalConfiguration {
+  WalletVisibility? visibility;
+  PayPalButtonType? buttonType;
+  PayPalButtonSize? buttonSize;
+  PayPalButtonStyle? buttonStyle;
+
+  PayPalConfiguration({
+    this.visibility,
+    this.buttonType,
+    this.buttonSize,
+    this.buttonStyle,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'visibility': visibility?.name,
+      'buttonType': buttonType?.name,
+      'buttonSize': buttonSize?.name,
+      'buttonStyle': buttonStyle?.toJson(),
+    };
+  }
+}
+
+/// A class representing wallet buttons configuration.
+class WalletButtonsConfiguration {
+  GooglePayConfiguration? googlePay;
+  ApplePayConfiguration? applePay;
+  PayPalConfiguration? payPal;
+
+  WalletButtonsConfiguration({
+    this.googlePay,
+    this.applePay,
+    this.payPal,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'googlePay': googlePay?.toJson(),
+      'applePay': applePay?.toJson(),
+      'payPal': payPal?.toJson(),
+    };
+  }
+}
+
+/// A class representing a payment method configuration item.
+class PaymentMethodConfig {
+  final String paymentMethod;
+  final String? message;
+
+  PaymentMethodConfig({
+    required this.paymentMethod,
+    this.message,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'paymentMethod': paymentMethod,
+      if (message != null) 'message': message,
+    };
+  }
+}
+
+/// Enum representing CVC icon display options.
+enum CvcIconDisplay { hidden, shown }
+
+/// Enum representing card brand icon display options.
+enum CardBrandIconDisplay { hidden, standard, hideGeneric, animated }
+
+/// Enum representing payment method arrangement for tabs.
+enum PaymentMethodsArrangement { defaultArrangement, grid }
+
+/// A class representing grouping behavior for saved payment methods.
+class GroupingBehavior {
+  final bool? displayInSeparateScreen;
+  final bool? displayInSeparateSection;
+  final bool? groupByPaymentMethods;
+
+  GroupingBehavior({
+    this.displayInSeparateScreen,
+    this.displayInSeparateSection,
+    this.groupByPaymentMethods,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'displayInSeparateScreen': displayInSeparateScreen,
+      'displayInSeparateSection': displayInSeparateSection,
+      'groupByPaymentMethods': groupByPaymentMethods,
+    };
+  }
+}
+
+/// A class representing saved payment method customization options.
+class SavedMethodCustomization {
+  final bool? defaultCollapsed;
+  final bool? hideCardExpiry;
+  final bool? hideCVCError;
+  final CvcIconDisplay? cvcIcon;
+  final GroupingBehavior? groupingBehavior;
+  final List<String>? hiddenPaymentMethods;
+
+  SavedMethodCustomization({
+    this.defaultCollapsed,
+    this.hideCardExpiry,
+    this.hideCVCError,
+    this.cvcIcon,
+    this.groupingBehavior,
+    this.hiddenPaymentMethods,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'defaultCollapsed': defaultCollapsed,
+      'hideCardExpiry': hideCardExpiry,
+      'hideCVCError': hideCVCError,
+      'cvcIcon': cvcIcon?.name,
+      'groupingBehavior': groupingBehavior?.toJson(),
+      'hiddenPaymentMethods': hiddenPaymentMethods,
+    };
+  }
+}
+
+/// A class representing payment method layout configuration.
+class PaymentMethodLayout {
+  final Layout? type;
+  final bool? showOneClickWalletsOnTop;
+  final PaymentMethodsArrangement? paymentMethodsArrangementForTabs;
+  final bool? defaultCollapsed;
+  final bool? radios;
+  final bool? spacedAccordionItems;
+  final int? maxAccordionItems;
+  final CvcIconDisplay? cvcIcon;
+  final CardBrandIconDisplay? cardBrandIcon;
+  final bool? showCheckedIconForSelection;
+  final SavedMethodCustomization? savedMethodCustomization;
+
+  PaymentMethodLayout({
+    this.type,
+    this.showOneClickWalletsOnTop,
+    this.paymentMethodsArrangementForTabs,
+    this.defaultCollapsed,
+    this.radios,
+    this.spacedAccordionItems,
+    this.maxAccordionItems,
+    this.cvcIcon,
+    this.cardBrandIcon,
+    this.showCheckedIconForSelection,
+    this.savedMethodCustomization,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': layoutToString(type),
+      'showOneClickWalletsOnTop': showOneClickWalletsOnTop,
+      'paymentMethodsArrangementForTabs':
+          paymentMethodsArrangementForTabs?.name == 'defaultArrangement'
+              ? 'default'
+              : paymentMethodsArrangementForTabs?.name,
+      'defaultCollapsed': defaultCollapsed,
+      'radios': radios,
+      'spacedAccordionItems': spacedAccordionItems,
+      'maxAccordionItems': maxAccordionItems,
+      'cvcIcon': cvcIcon?.name,
+      'cardBrandIcon': cardBrandIcon?.name,
+      'showCheckedIconForSelection': showCheckedIconForSelection,
+      'savedMethodCustomization': savedMethodCustomization?.toJson(),
     };
   }
 }
@@ -128,10 +495,28 @@ class Placeholder {
 }
 
 /// A class representing billing details.
+class Phone {
+  String? number;
+  String? code;
+
+  Phone({this.number, this.code});
+
+  factory Phone.fromJson(Map<String, dynamic> json) {
+    return Phone(
+      number: json['number'],
+      code: json['code'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'number': number, 'code': code};
+  }
+}
+
 class BillingDetails {
   String? email;
   String? name;
-  String? phone;
+  Phone? phone;
   Address? address;
 
   BillingDetails({this.email, this.name, this.phone, this.address});
@@ -140,8 +525,8 @@ class BillingDetails {
     return BillingDetails(
       email: json['email'],
       name: json['name'],
-      phone: json['phone'],
-      address: Address.fromJson(json['address']),
+      phone: json['phone'] != null ? Phone.fromJson(json['phone']) : null,
+      address: json['address'] != null ? Address.fromJson(json['address']) : null,
     );
   }
 
@@ -149,7 +534,7 @@ class BillingDetails {
     return {
       'email': email,
       'name': name,
-      'phone': phone,
+      'phone': phone?.toJson(),
       'address': address?.toJson(),
     };
   }
@@ -159,7 +544,7 @@ class BillingDetails {
 class ShippingDetails {
   String? email;
   String? name;
-  String? phone;
+  Phone? phone;
   Address? address;
 
   ShippingDetails({this.email, this.name, this.phone, this.address});
@@ -168,8 +553,8 @@ class ShippingDetails {
     return ShippingDetails(
       email: json['email'],
       name: json['name'],
-      phone: json['phone'],
-      address: Address.fromJson(json['address']),
+      phone: json['phone'] != null ? Phone.fromJson(json['phone']) : null,
+      address: json['address'] != null ? Address.fromJson(json['address']) : null,
     );
   }
 
@@ -177,7 +562,7 @@ class ShippingDetails {
     return {
       'email': email,
       'name': name,
-      'phone': phone,
+      'phone': phone?.toJson(),
       'address': address?.toJson(),
     };
   }
@@ -191,6 +576,8 @@ class Address {
   late String? line1;
   late String? line2;
   late String? city;
+  late String? firstName;
+  late String? lastName;
 
   Address({
     this.postalCode,
@@ -199,6 +586,8 @@ class Address {
     this.line1,
     this.line2,
     this.city,
+    this.firstName,
+    this.lastName,
   });
 
   factory Address.fromJson(Map<String, dynamic> json) {
@@ -209,6 +598,8 @@ class Address {
       line1: json['line1'],
       line2: json['line2'],
       city: json['city'],
+      firstName: json['first_name'],
+      lastName: json['last_name'],
     );
   }
 
@@ -220,12 +611,14 @@ class Address {
       'line1': line1,
       'line2': line2,
       'city': city,
+      'first_name': firstName,
+      'last_name': lastName,
     };
   }
 }
 
 /// Enum representing different themes.
-enum Theme { auto, light, dark, minimal, flatMinimal }
+enum Theme { auto, light, dark, minimal, flatMinimal, brutal, glass, skeu, clay, charcoal, soft }
 
 /// Function to convert Theme enum to corresponding string values.
 String themeToString(Theme? theme) {
@@ -238,6 +631,18 @@ String themeToString(Theme? theme) {
       return "Minimal";
     case Theme.flatMinimal:
       return "FlatMinimal";
+    case Theme.brutal:
+      return "Brutal";
+    case Theme.glass:
+      return "Glass";
+    case Theme.skeu:
+      return "Skeu";
+    case Theme.clay:
+      return "Clay";
+    case Theme.charcoal:
+      return "Charcoal";
+    case Theme.soft:
+      return "Soft";
     default:
       return "default";
   }
@@ -254,6 +659,18 @@ Theme stringToTheme(String theme) {
       return Theme.minimal;
     case "flatMinimal":
       return Theme.flatMinimal;
+    case "brutal":
+      return Theme.brutal;
+    case "glass":
+      return Theme.glass;
+    case "skeu":
+      return Theme.skeu;
+    case "clay":
+      return Theme.clay;
+    case "charcoal":
+      return Theme.charcoal;
+    case "soft":
+      return Theme.soft;
     default:
       return Theme.auto;
   }
@@ -286,6 +703,147 @@ Layout stringToLayout(String theme) {
   }
 }
 
+/// A class representing logo colors.
+class LogoColors {
+  final String? backgroundColor;
+  final String? selected;
+  final String? unselected;
+
+  LogoColors({this.backgroundColor, this.selected, this.unselected});
+
+  factory LogoColors.fromJson(Map<String, dynamic> json) {
+    return LogoColors(
+      backgroundColor: json['backgroundColor'],
+      selected: json['selected'],
+      unselected: json['unselected'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'backgroundColor': backgroundColor,
+      'selected': selected,
+      'unselected': unselected,
+    };
+  }
+}
+
+/// A class representing logo color type (light/dark).
+class LogoColorType {
+  final LogoColors? light;
+  final LogoColors? dark;
+
+  LogoColorType({this.light, this.dark});
+
+  factory LogoColorType.fromJson(Map<String, dynamic> json) {
+    return LogoColorType(
+      light: json['light'] != null ? LogoColors.fromJson(json['light']) : null,
+      dark: json['dark'] != null ? LogoColors.fromJson(json['dark']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'light': light?.toJson(), 'dark': dark?.toJson()};
+  }
+}
+
+/// A class representing checked icon colors.
+class CheckedIconColors {
+  final String? color;
+  final String? stroke;
+
+  CheckedIconColors({this.color, this.stroke});
+
+  factory CheckedIconColors.fromJson(Map<String, dynamic> json) {
+    return CheckedIconColors(
+      color: json['color'],
+      stroke: json['stroke'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'color': color, 'stroke': stroke};
+  }
+}
+
+/// A class representing checked icon color type (light/dark).
+class CheckedIconColorType {
+  final CheckedIconColors? light;
+  final CheckedIconColors? dark;
+
+  CheckedIconColorType({this.light, this.dark});
+
+  factory CheckedIconColorType.fromJson(Map<String, dynamic> json) {
+    return CheckedIconColorType(
+      light: json['light'] != null ? CheckedIconColors.fromJson(json['light']) : null,
+      dark: json['dark'] != null ? CheckedIconColors.fromJson(json['dark']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'light': light?.toJson(), 'dark': dark?.toJson()};
+  }
+}
+
+/// A class representing checked icon for selection.
+class CheckedIconForSelection {
+  final CheckedIconColorType? colors;
+  final double? size;
+  final double? bottom;
+  final double? right;
+
+  CheckedIconForSelection({this.colors, this.size, this.bottom, this.right});
+
+  factory CheckedIconForSelection.fromJson(Map<String, dynamic> json) {
+    return CheckedIconForSelection(
+      colors: json['colors'] != null ? CheckedIconColorType.fromJson(json['colors']) : null,
+      size: json['size'],
+      bottom: json['bottom'],
+      right: json['right'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'colors': colors?.toJson(),
+      'size': size,
+      'bottom': bottom,
+      'right': right,
+    };
+  }
+}
+
+/// A class representing logo customization.
+class LogoCustomization {
+  final double? borderRadius;
+  final LogoColorType? colors;
+  final CheckedIconForSelection? checkedIconForSelection;
+
+  LogoCustomization({
+    this.borderRadius,
+    this.colors,
+    this.checkedIconForSelection,
+  });
+
+  factory LogoCustomization.fromJson(Map<String, dynamic> json) {
+    return LogoCustomization(
+      borderRadius: json['borderRadius'],
+      colors: json['colors'] != null ? LogoColorType.fromJson(json['colors']) : null,
+      checkedIconForSelection: json['checkedIconForSelection'] != null
+          ? CheckedIconForSelection.fromJson(json['checkedIconForSelection'])
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'borderRadius': borderRadius,
+      'colors': colors?.toJson(),
+      'checkedIconForSelection': checkedIconForSelection?.toJson(),
+    };
+  }
+}
+
 /// A class representing appearance configurations.
 class Appearance {
   late Map<String, dynamic> themeData;
@@ -296,35 +854,29 @@ class Appearance {
     PrimaryButton? primaryButton,
     String? locale,
     Font? font,
-    GPayParams? googlePay,
-    ApplePayParams? applePay,
     Theme? theme,
-    Layout? layout,
+    LogoCustomization? logo,
   }) {
     themeData = {
       'colors': colors?.toJson(),
       'shapes': shapes?.toJson(),
       'primaryButton': primaryButton?.toJson(),
       'locale': locale,
-      'typography': font?.toJson(),
-      'applePay': applePay?.toJson(),
-      'googlePay': googlePay?.toJson(),
+      'font': font?.toJson(),
       'theme': themeToString(theme),
-      'layout': layoutToString(layout),
+      'logo': logo?.toJson(),
     };
   }
 
   factory Appearance.fromJson(Map<String, dynamic> json) {
     return Appearance(
-      colors: DynamicColors.fromJson(json['colors']),
-      shapes: Shapes.fromJson(json['shapes']),
-      primaryButton: PrimaryButton.fromJson(json['primaryButton']),
+      colors: json['colors'] != null ? DynamicColors.fromJson(json['colors']) : null,
+      shapes: json['shapes'] != null ? Shapes.fromJson(json['shapes']) : null,
+      primaryButton: json['primaryButton'] != null ? PrimaryButton.fromJson(json['primaryButton']) : null,
       locale: json['locale'],
-      font: Font.fromJson(json['font']),
-      applePay: ApplePayParams.fromJson(json['applePay']),
-      googlePay: GPayParams.fromJson(json['googlePay']),
+      font: json['font'] != null ? Font.fromJson(json['font']) : null,
       theme: stringToTheme(json['theme']),
-      layout: stringToLayout(json['layout']),
+      logo: json['logo'] != null ? LogoCustomization.fromJson(json['logo']) : null,
     );
   }
 
@@ -335,35 +887,128 @@ class Appearance {
 
 class Font {
   String? family;
-  Float? scale;
+  double? scale;
+  double? headingTextSizeAdjust;
+  double? subHeadingTextSizeAdjust;
+  double? placeholderTextSizeAdjust;
+  double? buttonTextSizeAdjust;
+  double? errorTextSizeAdjust;
+  double? linkTextSizeAdjust;
+  double? modalTextSizeAdjust;
+  double? cardTextSizeAdjust;
 
-  Font({this.family, this.scale});
+  Font({
+    this.family,
+    this.scale,
+    this.headingTextSizeAdjust,
+    this.subHeadingTextSizeAdjust,
+    this.placeholderTextSizeAdjust,
+    this.buttonTextSizeAdjust,
+    this.errorTextSizeAdjust,
+    this.linkTextSizeAdjust,
+    this.modalTextSizeAdjust,
+    this.cardTextSizeAdjust,
+  });
 
   factory Font.fromJson(Map<String, dynamic> json) {
-    return Font(family: json['family'], scale: json['scale']);
+    return Font(
+      family: json['family'],
+      scale: json['scale'],
+      headingTextSizeAdjust: json['headingTextSizeAdjust'],
+      subHeadingTextSizeAdjust: json['subHeadingTextSizeAdjust'],
+      placeholderTextSizeAdjust: json['placeholderTextSizeAdjust'],
+      buttonTextSizeAdjust: json['buttonTextSizeAdjust'],
+      errorTextSizeAdjust: json['errorTextSizeAdjust'],
+      linkTextSizeAdjust: json['linkTextSizeAdjust'],
+      modalTextSizeAdjust: json['modalTextSizeAdjust'],
+      cardTextSizeAdjust: json['cardTextSizeAdjust'],
+    );
   }
 
   Map<String, dynamic> toJson() {
-    return {'fontResId': family, 'fontSizeSp': scale};
+    return {
+      'family': family,
+      'scale': scale,
+      'headingTextSizeAdjust': headingTextSizeAdjust,
+      'subHeadingTextSizeAdjust': subHeadingTextSizeAdjust,
+      'placeholderTextSizeAdjust': placeholderTextSizeAdjust,
+      'buttonTextSizeAdjust': buttonTextSizeAdjust,
+      'errorTextSizeAdjust': errorTextSizeAdjust,
+      'linkTextSizeAdjust': linkTextSizeAdjust,
+      'modalTextSizeAdjust': modalTextSizeAdjust,
+      'cardTextSizeAdjust': cardTextSizeAdjust,
+    };
+  }
+}
+
+/// A class representing primary button color type.
+class PrimaryButtonColorType {
+  final String? background;
+  final String? text;
+  final String? border;
+
+  PrimaryButtonColorType({this.background, this.text, this.border});
+
+  Map<String, dynamic> toJson() {
+    return {
+      'background': background,
+      'text': text,
+      'border': border,
+    };
+  }
+}
+
+/// A class representing primary button colors.
+class PrimaryButtonColors {
+  final PrimaryButtonColorType? light;
+  final PrimaryButtonColorType? dark;
+
+  PrimaryButtonColors({this.light, this.dark});
+
+  Map<String, dynamic> toJson() {
+    return {'light': light?.toJson(), 'dark': dark?.toJson()};
   }
 }
 
 /// A class representing primary button configurations.
 class PrimaryButton {
   Shapes? shapes;
-  DynamicColors? colors;
+  PrimaryButtonColors? colors;
+  double? height;
 
-  PrimaryButton({this.shapes, this.colors});
+  PrimaryButton({this.shapes, this.colors, this.height});
 
   factory PrimaryButton.fromJson(Map<String, dynamic> json) {
     return PrimaryButton(
-      shapes: Shapes.fromJson(json['shapes']),
-      colors: DynamicColors.fromJson(json['colors']),
+      shapes: json['shapes'] != null ? Shapes.fromJson(json['shapes']) : null,
+      colors: json['colors'] != null
+          ? PrimaryButtonColors(
+              light: json['colors']['light'] != null
+                  ? PrimaryButtonColorType(
+                      background: json['colors']['light']['background'],
+                      text: json['colors']['light']['text'],
+                      border: json['colors']['light']['border'],
+                    )
+                  : null,
+              dark: json['colors']['dark'] != null
+                  ? PrimaryButtonColorType(
+                      background: json['colors']['dark']['background'],
+                      text: json['colors']['dark']['text'],
+                      border: json['colors']['dark']['border'],
+                    )
+                  : null,
+            )
+          : null,
+      height: json['height'],
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'shapes': shapes?.toJson(), 'colors': colors?.toJson()};
+    return {
+      'shapes': shapes?.toJson(),
+      'colors': colors?.toJson(),
+      'height': height,
+    };
   }
 }
 
@@ -372,14 +1017,24 @@ class Shapes {
   double? borderRadius;
   double? borderWidth;
   Shadow? shadow;
+  double? inputHeight;
+  double? gap;
 
-  Shapes({this.borderRadius, this.borderWidth, this.shadow});
+  Shapes({
+    this.borderRadius,
+    this.borderWidth,
+    this.shadow,
+    this.inputHeight,
+    this.gap,
+  });
 
   factory Shapes.fromJson(Map<String, dynamic> json) {
     return Shapes(
       borderRadius: json['borderRadius'],
       borderWidth: json['borderWidth'],
-      shadow: Shadow.fromJson(json['shadow']),
+      shadow: json['shadow'] != null ? Shadow.fromJson(json['shadow']) : null,
+      inputHeight: json['inputHeight'],
+      gap: json['gap'],
     );
   }
 
@@ -388,6 +1043,8 @@ class Shapes {
       'borderRadius': borderRadius,
       'borderWidth': borderWidth,
       'shadow': shadow?.toJson(),
+      'inputHeight': inputHeight,
+      'gap': gap,
     };
   }
 }
@@ -429,7 +1086,7 @@ class Shadow {
       color: json['color'],
       opacity: json['opacity'],
       blurRadius: json['blurRadius'],
-      offset: json['offset'],
+      offset: json['offset'] != null ? Offset.fromJson(json['offset']) : null,
       intensity: json['intensity'],
     );
   }
@@ -454,8 +1111,8 @@ class DynamicColors {
 
   factory DynamicColors.fromJson(Map<String, dynamic> json) {
     return DynamicColors(
-      light: ColorsObject.fromJson(json['light']),
-      dark: ColorsObject.fromJson(json['dark']),
+      light: json['light'] != null ? ColorsObject.fromJson(json['light']) : null,
+      dark: json['dark'] != null ? ColorsObject.fromJson(json['dark']) : null,
     );
   }
 
@@ -479,6 +1136,12 @@ class ColorsObject {
   String? error;
   String? loaderBackground;
   String? loaderForeground;
+  String? overlay;
+  String? selectedComponentBackground;
+  String? selectedComponentBorder;
+  double? selectedComponentBorderWidth;
+  String? selectedComponentDivider;
+  String? selectedComponentText;
 
   ColorsObject({
     this.primary,
@@ -494,6 +1157,12 @@ class ColorsObject {
     this.error,
     this.loaderBackground,
     this.loaderForeground,
+    this.overlay,
+    this.selectedComponentBackground,
+    this.selectedComponentBorder,
+    this.selectedComponentBorderWidth,
+    this.selectedComponentDivider,
+    this.selectedComponentText,
   });
 
   factory ColorsObject.fromJson(Map<String, dynamic> json) {
@@ -511,6 +1180,12 @@ class ColorsObject {
       error: json['error'],
       loaderBackground: json['loaderBackground'],
       loaderForeground: json['loaderForeground'],
+      overlay: json['overlay'],
+      selectedComponentBackground: json['selectedComponentBackground'],
+      selectedComponentBorder: json['selectedComponentBorder'],
+      selectedComponentBorderWidth: json['selectedComponentBorderWidth'],
+      selectedComponentDivider: json['selectedComponentDivider'],
+      selectedComponentText: json['selectedComponentText'],
     );
   }
 
@@ -527,9 +1202,14 @@ class ColorsObject {
       'placeholderText': placeholderText,
       'icon': icon,
       'error': error,
-      'text': primaryText,
       'loaderBackground': loaderBackground,
       'loaderForeground': loaderForeground,
+      'overlay': overlay,
+      'selectedComponentBackground': selectedComponentBackground,
+      'selectedComponentBorder': selectedComponentBorder,
+      'selectedComponentBorderWidth': selectedComponentBorderWidth,
+      'selectedComponentDivider': selectedComponentDivider,
+      'selectedComponentText': selectedComponentText,
     };
   }
 }
@@ -543,8 +1223,8 @@ class Customer {
 
   factory Customer.fromJson(Map<String, dynamic> json) {
     return Customer(
-      ephemeralKeySecret: json['ephemeralKey'],
-      id: json['customerId'],
+      ephemeralKeySecret: json['ephemeralKeySecret'],
+      id: json['id'],
     );
   }
 
@@ -580,9 +1260,11 @@ class GPayButtonStyle {
     return GPayButtonStyle(
       light: GPayButtonStyleType.values.firstWhere(
         (e) => e.name == json['light'],
+        orElse: () => GPayButtonStyleType.light,
       ),
       dark: GPayButtonStyleType.values.firstWhere(
         (e) => e.name == json['dark'],
+        orElse: () => GPayButtonStyleType.dark,
       ),
     );
   }
@@ -650,9 +1332,11 @@ class ApplePayButtonStyle {
     return ApplePayButtonStyle(
       light: ApplePayButtonStyleType.values.firstWhere(
         (e) => e.name == json['light'],
+        orElse: () => ApplePayButtonStyleType.white,
       ),
       dark: ApplePayButtonStyleType.values.firstWhere(
         (e) => e.name == json['dark'],
+        orElse: () => ApplePayButtonStyleType.black,
       ),
     );
   }
@@ -690,6 +1374,50 @@ class ApplePayParams {
       'buttonType': buttonType?.name,
       'buttonStyle': buttonStyle?.toJson(),
     };
+  }
+}
+
+/// Enum representing subscription events for the payment sheet.
+enum SubscriptionEvent {
+  paymentMethodInfoCard,
+  paymentMethodStatus,
+  formStatus,
+  paymentMethodInfoBillingAddress,
+
+  /// Emitted by [CvcWidget] unconditionally; listing it in
+  /// [Configuration.subscribedEvents] is not required.
+  cvcStatus;
+
+  String get name {
+    switch (this) {
+      case SubscriptionEvent.paymentMethodInfoCard:
+        return 'PAYMENT_METHOD_INFO_CARD';
+      case SubscriptionEvent.paymentMethodStatus:
+        return 'PAYMENT_METHOD_STATUS';
+      case SubscriptionEvent.formStatus:
+        return 'FORM_STATUS';
+      case SubscriptionEvent.paymentMethodInfoBillingAddress:
+        return 'PAYMENT_METHOD_INFO_BILLING_ADDRESS';
+      case SubscriptionEvent.cvcStatus:
+        return 'CVC_STATUS';
+    }
+  }
+}
+
+/// Represents a payment event received from the payment sheet.
+class PaymentEvent {
+  final String eventName;
+  final Map<String, dynamic>? payload;
+
+  PaymentEvent({required this.eventName, this.payload});
+
+  factory PaymentEvent.fromMap(Map<dynamic, dynamic> map) {
+    return PaymentEvent(
+      eventName: map['eventName'] as String? ?? '',
+      payload: map['payload'] != null
+          ? Map<String, dynamic>.from(map['payload'] as Map)
+          : null,
+    );
   }
 }
 
@@ -884,28 +1612,34 @@ class PaymentMethod extends PaymentMethodResponse {
 
   factory PaymentMethod.fromMap(Map<String, dynamic> map) {
     return PaymentMethod(
-      paymentToken: map['payment_token'] as String,
-      paymentMethodId: map['payment_method_id'] as String,
-      customerId: map['customer_id'] as String,
+      paymentToken: map['payment_token'] as String? ?? '',
+      paymentMethodId: map['payment_method_id'] as String? ?? '',
+      customerId: map['customer_id'] as String? ?? '',
       paymentMethod: PaymentMethodType.fromString(
-        map['payment_method_str'] as String? ?? map['payment_method'] as String,
+        map['payment_method_str'] as String? ??
+            map['payment_method'] as String? ??
+            'unknown',
       ),
-      paymentMethodType: map['payment_method_type'] as String,
-      paymentMethodIssuer: map['payment_method_issuer'] as String,
+      paymentMethodType: map['payment_method_type'] as String? ?? '',
+      paymentMethodIssuer: map['payment_method_issuer'] as String? ?? '',
       paymentMethodIssuerCode: map['payment_method_issuer_code'] as String?,
-      recurringEnabled: map['recurring_enabled'] as bool,
-      installmentPaymentEnabled: map['installment_payment_enabled'] as bool,
-      paymentExperience: List<String>.from(map['payment_experience'] as List),
+      recurringEnabled: map['recurring_enabled'] as bool? ?? false,
+      installmentPaymentEnabled:
+          map['installment_payment_enabled'] as bool? ?? false,
+      paymentExperience: List<String>.from(
+        map['payment_experience'] as List? ?? const [],
+      ),
       card: map['card'] != null
           ? Card.fromMap(Map<String, dynamic>.from(map['card'] as Map))
           : null,
       metadata: map['metadata'] as String?,
-      created: map['created'] as String,
+      created: map['created'] as String? ?? '',
       bank: map['bank'] as String?,
       surchargeDetails: map['surcharge_details'] as String?,
-      requiresCvv: map['requires_cvv'] as bool,
-      lastUsedAt: map['last_used_at'] as String,
-      defaultPaymentMethodSet: map['default_payment_method_set'] as bool,
+      requiresCvv: map['requires_cvv'] as bool? ?? false,
+      lastUsedAt: map['last_used_at'] as String? ?? '',
+      defaultPaymentMethodSet:
+          map['default_payment_method_set'] as bool? ?? false,
     );
   }
 
@@ -1034,8 +1768,11 @@ class PaymentResult {
   factory PaymentResult.fromMap(Map<String, dynamic> map) {
     return PaymentResult(
       status: _getStatusFromString(map['type'] ?? ''),
-      message: _getMessageFromString(map['message'] ?? ''),
-      error: _getErrorFromString(map['type'] ?? '', map['message'] ?? ''),
+      message: _getMessageFromString(map['message']?.toString() ?? ''),
+      error: _getErrorFromString(
+        map['type']?.toString() ?? '',
+        map['message']?.toString() ?? '',
+      ),
     );
   }
 
@@ -1045,6 +1782,7 @@ class PaymentResult {
       case 'completed':
         return Status.completed;
       case 'cancelled':
+      case 'canceled':
         return Status.cancelled;
       default:
         return Status.failed;
@@ -1059,6 +1797,7 @@ class PaymentResult {
       case 'failed':
         return Result.failed;
       case 'cancelled':
+      case 'canceled':
         return Result.cancelled;
       case 'processing':
         return Result.processing;
@@ -1088,4 +1827,64 @@ class PaymentResult {
   ) {
     return HyperswitchException(code: statusString, message: messageString);
   }
+}
+
+/// Represents data passed to [PaymentElementController.onPaymentConfirmButtonClick].
+class PaymentRequestData {
+  final String? paymentMethodType;
+
+  PaymentRequestData({this.paymentMethodType});
+
+  factory PaymentRequestData.fromMap(Map<dynamic, dynamic> map) {
+    return PaymentRequestData(
+      paymentMethodType: map['paymentMethodType'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'paymentMethodType': paymentMethodType};
+  }
+}
+
+/// Event emitted by [CvcWidgetController.onCvcEvent].
+class CvcWidgetEvent {
+  final String type;
+  final Map<String, dynamic> payload;
+
+  CvcWidgetEvent({required this.type, required this.payload});
+
+  factory CvcWidgetEvent.fromMap(Map<dynamic, dynamic> map) {
+    return CvcWidgetEvent(
+      type: map['type'] as String? ?? '',
+      payload: map['payload'] != null
+          ? Map<String, dynamic>.from(map['payload'] as Map)
+          : {},
+    );
+  }
+}
+
+/// Controls a PaymentElement widget after it has been created.
+class PaymentElementController {
+  final String widgetId;
+  final void Function(PaymentEvent)? onPaymentEvent;
+  final void Function(PaymentResult)? onPaymentResult;
+  final Future<bool> Function(PaymentRequestData)? onPaymentConfirmButtonClick;
+
+  PaymentElementController({
+    required this.widgetId,
+    this.onPaymentEvent,
+    this.onPaymentResult,
+    this.onPaymentConfirmButtonClick,
+  });
+}
+
+/// Controls a CvcWidget after it has been created.
+class CvcWidgetController {
+  final String widgetId;
+  final void Function(CvcWidgetEvent)? onCvcEvent;
+
+  CvcWidgetController({
+    required this.widgetId,
+    this.onCvcEvent,
+  });
 }

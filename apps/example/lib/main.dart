@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart' hide Card, Theme;
-import 'package:flutter/material.dart' as material;
+import 'package:flutter/material.dart' hide Card, Theme, Placeholder;
 import 'package:flutter_hyperswitch/flutter_hyperswitch.dart';
 import 'package:http/http.dart' as http;
 
@@ -9,324 +8,31 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final String _endpoint = Platform.isAndroid
-      ? "http://10.0.2.2:5252"
-      : "http://localhost:5252";
-  final _hyper = FlutterHyperswitch();
-
-  Session? _sessionId;
-  SavedSession? _savedSessionId;
-
-  String _statusText = '';
-  String _defaultPaymentMethodText = '';
-  String _confirmStatusText = '';
-
-  bool _isInitialized = false;
-  bool _showChangeButton = false;
-  int _confirmState = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _initPlatformState();
-  }
-
-  Future<void> _initPlatformState() async {
-    final response = await http.get(
-      Uri.parse("$_endpoint/create-payment-intent"),
-    );
-    if (response.statusCode == 200) {
-      final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
-      _hyper.init(HyperConfig(publishableKey: responseBody['publishableKey']));
-      try {
-        _sessionId = await _hyper.initPaymentSession(
-          PaymentMethodParams(
-            clientSecret: responseBody['clientSecret'],
-            configuration: Configuration(
-              displayDefaultSavedPaymentIcon: false,
-              paymentSheetHeaderLabel: "Payment methods",
-              savedPaymentSheetHeaderLabel: "Select payment method",
-              primaryButtonLabel: "Purchase (\$2.00)",
-              appearance: Appearance(
-                layout: Layout.tabs,
-                googlePay: GPayParams(
-                  buttonType: GPayButtonType.donate,
-                  buttonStyle: GPayButtonStyle(
-                    light: GPayButtonStyleType.light,
-                    dark: GPayButtonStyleType.light,
-                  ),
-                ),
-                applePay: ApplePayParams(
-                  buttonType: ApplePayButtonType.donate,
-                  buttonStyle: ApplePayButtonStyle(
-                    light: ApplePayButtonStyleType.whiteOutline,
-                    dark: ApplePayButtonStyleType.whiteOutline,
-                  ),
-                ),
-                font: Font(family: "Montserrat"),
-                colors: DynamicColors(
-                  dark: ColorsObject(primary: "#8DBD00", background: "#F5F8F9"),
-                  light: ColorsObject(
-                    primary: "#8DBD00",
-                    background: "#F5F8F9",
-                  ),
-                ),
-                primaryButton: PrimaryButton(
-                  shapes: Shapes(borderRadius: 32.0),
-                ),
-              ),
-            ),
-          ),
-        );
-      } catch (ex) {
-        setState(() {
-          _statusText = (ex as HyperswitchException).message;
-        });
-      }
-      setState(() {
-        _isInitialized = _sessionId != null;
-        _statusText = _isInitialized
-            ? _statusText
-            : "initPaymentSession failed";
-      });
-    } else {
-      setState(() {
-        _statusText = "API Call Failed";
-      });
-    }
-  }
-
-  Future<void> _initializeHeadless() async {
-    if (_sessionId == null) {
-      setState(() {
-        _defaultPaymentMethodText = "SessionId is empty";
-        _statusText = "";
-      });
-      return;
-    }
-    try {
-      _savedSessionId = await _hyper.getCustomerSavedPaymentMethods(
-        _sessionId!,
-      );
-      final paymentMethod = await _hyper.getCustomerLastUsedPaymentMethodData(
-        _savedSessionId!,
-      );
-      if (paymentMethod is PaymentMethod) {
-        if (paymentMethod.paymentMethod == PaymentMethodType.card) {
-          final card = paymentMethod.card!;
-          _setDefaultPaymentMethodText(
-            "${card.nickName}  ${card.last4Digits}  ${card.expiryMonth}/${card.expiryYear}",
-            true,
-          );
-          _showChangeButton = true;
-        } else if (paymentMethod.paymentMethod == PaymentMethodType.wallet) {
-          _showChangeButton = true;
-          _setDefaultPaymentMethodText(paymentMethod.paymentMethodType, true);
-        }
-      } else if (paymentMethod is PaymentMethodError) {
-        _setDefaultPaymentMethodText(paymentMethod.message, false);
-      } else {
-        _setDefaultPaymentMethodText(
-          "getCustomerDefaultSavedPaymentMethodData failed",
-          false,
-        );
-      }
-    } catch (error) {
-      _handleError(error, 1);
-    }
-  }
-
-  Future<void> _confirmPayment() async {
-    // setState(() {
-    //   _confirmState = 1;
-    // });
-    try {
-      if (_savedSessionId != null) {
-        final confirmWithCustomerDefaultPaymentMethodResponse = await _hyper
-            .confirmWithLastUsedPaymentMethod(_savedSessionId!);
-        final message = confirmWithCustomerDefaultPaymentMethodResponse.message;
-        if (message != null) {
-          _setConfirmStatusText(
-            "${confirmWithCustomerDefaultPaymentMethodResponse.status.name}\n${message.name}",
-          );
-        } else {
-          _setConfirmStatusText(
-            "${confirmWithCustomerDefaultPaymentMethodResponse.status.name}\n${confirmWithCustomerDefaultPaymentMethodResponse.error.message}",
-          );
-        }
-      } else {
-        _setConfirmStatusText("SavedSession is empty");
-      }
-    } catch (error) {
-      _handleError(error, 2);
-    } finally {
-      setState(() {
-        _showChangeButton = false;
-        _defaultPaymentMethodText = '';
-        _confirmState = 0;
-        _initPlatformState();
-      });
-    }
-  }
-
-  Future<void> _presentPaymentSheet(bool isHeadless) async {
-    setState(() {
-      _isInitialized = false;
-    });
-    if (_sessionId == null) {
-      _setStatusText("SessionId is empty");
-      return;
-    }
-    try {
-      final presentPaymentSheetResponse = await _hyper.presentPaymentSheet(
-        _sessionId!,
-      );
-      if (isHeadless) {
-        _setConfirmStatusText(
-          _buildMessage(
-            presentPaymentSheetResponse.status.name,
-            presentPaymentSheetResponse.message,
-            presentPaymentSheetResponse.error.message,
-          ),
-        );
-      } else {
-        _setStatusText(
-          _buildMessage(
-            presentPaymentSheetResponse.status.name,
-            presentPaymentSheetResponse.message,
-            presentPaymentSheetResponse.error.message,
-          ),
-        );
-      }
-      if (presentPaymentSheetResponse.status != Status.cancelled) {
-        setState(() {
-          _showChangeButton = false;
-          _defaultPaymentMethodText = '';
-          _confirmState = 0;
-          _initPlatformState();
-        });
-      }
-      setState(() {
-        _isInitialized = true;
-      });
-    } catch (error) {
-      _handleError(error, 0);
-    }
-  }
-
-  String _buildMessage(String status, Result? message, String error) {
-    if (message != null) {
-      return "$status\n${message.name}";
-    } else {
-      return "$status\n$error";
-    }
-  }
-
-  void _handleError(dynamic error, int flow) {
-    final errorMessage = error is HyperswitchException
-        ? error.message
-        : error.toString();
-    if (flow == 0) {
-      _setStatusText(errorMessage);
-    } else if (flow == 1) {
-      _setDefaultPaymentMethodText(errorMessage, false);
-    } else if (flow == 2) {
-      _setConfirmStatusText(errorMessage);
-    }
-  }
-
-  void _setStatusText(String text) {
-    setState(() {
-      _statusText = text;
-    });
-  }
-
-  void _setDefaultPaymentMethodText(String text, bool show) {
-    setState(() {
-      _defaultPaymentMethodText = text;
-      _confirmStatusText = '';
-      if (show) {
-        _confirmState = 2;
-      }
-    });
-  }
-
-  void _setConfirmStatusText(String text) {
-    setState(() {
-      _confirmStatusText = text;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(fontFamily: 'montserrat'),
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Plugin example app')),
-        body: Column(
-          children: [_buildHeadlessSdkExample(), _buildPaymentSheetExample()],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeadlessSdkExample() {
-    return Expanded(
-      child: material.Card(
-        elevation: 4,
-        margin: const EdgeInsets.all(18),
-        child: Padding(
-          padding: const EdgeInsets.all(36),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
+      home: DefaultTabController(
+        length: 3,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Hyperswitch Demo'),
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: 'Payment Sheet'),
+                Tab(text: 'Headless'),
+                Tab(text: 'Widgets'),
+              ],
+            ),
+          ),
+          body: TabBarView(
             children: [
-              const Center(
-                child: Text(
-                  "Headless SDK Example",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              ),
-              Center(
-                child: ElevatedButton(
-                  onPressed: _isInitialized ? _initializeHeadless : null,
-                  child: Text(
-                    _isInitialized ? "Initialize Headless" : "Loading ...",
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(child: Text(_defaultPaymentMethodText)),
-                  if (_showChangeButton)
-                    TextButton(
-                      onPressed: () {
-                        _presentPaymentSheet(true);
-                      },
-                      child: const Text("Change"),
-                    ),
-                ],
-              ),
-              if (_confirmState > 0)
-                Center(
-                  child: ElevatedButton(
-                    onPressed: _confirmState == 2 ? _confirmPayment : null,
-                    child: Text(
-                      _confirmState == 1 ? "Processing ..." : "Confirm Payment",
-                    ),
-                  ),
-                ),
-              if (_confirmStatusText.isNotEmpty)
-                Center(child: Text(_confirmStatusText)),
+              PaymentSheetTab(endpoint: _endpoint),
+              HeadlessTab(endpoint: _endpoint),
+              WidgetsTab(endpoint: _endpoint),
             ],
           ),
         ),
@@ -334,38 +40,842 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Widget _buildPaymentSheetExample() {
-    return Expanded(
-      child: material.Card(
-        elevation: 4,
-        margin: const EdgeInsets.only(left: 18, right: 18, bottom: 18),
-        child: Padding(
-          padding: const EdgeInsets.all(36),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Center(
-                child: Text(
-                  "Payment Sheet Example",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
+  static String get _endpoint =>
+      Platform.isAndroid ? "http://10.0.2.2:5252" : "http://localhost:5252";
+}
+
+/// Shared neon appearance used by both the payment sheet and the widgets.
+Appearance _buildNeonAppearance({LogoCustomization? logo}) {
+  return Appearance(
+    theme: Theme.dark,
+    // iOS resolves fonts by their embedded family name — for PressStart2P
+    // that's "Press Start 2P"; the plugins also try the space-stripped file
+    // name (PressStart2P-*.ttf) when locating the asset.
+    font: Font(
+      family: 'Montserrat',
+      scale: 0.8,
+      headingTextSizeAdjust: 0.9,
+      buttonTextSizeAdjust: 0.85,
+    ),
+    colors: DynamicColors(
+      dark: ColorsObject(
+        primary: '#FF00FF',
+        background: '#0A0A0A',
+        overlay: '#000000CC',
+        secondaryText: '#FF00FF',
+        selectedComponentBackground: '#1A0033',
+        selectedComponentBorder: '#FF00FF',
+        primaryText: '#00FFFF',
+        componentBackground: '#111111',
+        componentBorder: '#FF00FF',
+        componentDivider: '#330033',
+        componentText: '#00FFFF',
+        placeholderText: '#660066',
+        icon: '#FF00FF',
+        error: '#FF0000',
+        loaderBackground: '#0A0A0A',
+        loaderForeground: '#FF00FF',
+        selectedComponentDivider: '#660066',
+        selectedComponentText: '#00FFFF',
+        selectedComponentBorderWidth: 2,
+      ),
+      light: ColorsObject(
+        primary: '#00FFFF',
+        background: '#FFEE00',
+        overlay: '#00000033',
+        secondaryText: '#FF00FF',
+        selectedComponentBackground: '#FFDD00',
+        selectedComponentBorder: '#FF00FF',
+        primaryText: '#0000FF',
+        componentBackground: '#FFFF00',
+        componentBorder: '#FF00FF',
+        componentDivider: '#FF00FF',
+        componentText: '#0000FF',
+        placeholderText: '#FF99FF',
+        icon: '#FF00FF',
+        error: '#FF0000',
+        loaderBackground: '#FFEE00',
+        loaderForeground: '#FF00FF',
+        selectedComponentDivider: '#FF00FF',
+        selectedComponentText: '#0000FF',
+        selectedComponentBorderWidth: 2,
+      ),
+    ),
+    shapes: Shapes(
+      borderRadius: 0,
+      borderWidth: 2,
+      inputHeight: 64,
+      gap: 16,
+      shadow: Shadow(
+        color: '#FF00FF',
+        opacity: 0.5,
+        blurRadius: 8,
+        intensity: 0.7,
+        offset: Offset(x: 2, y: 2),
+      ),
+    ),
+    primaryButton: PrimaryButton(
+      height: 56,
+      shapes: Shapes(borderRadius: 0),
+      colors: PrimaryButtonColors(
+        light: PrimaryButtonColorType(
+          background: '#FF00FF',
+          text: '#00FFFF',
+          border: '#00FFFF',
+        ),
+        dark: PrimaryButtonColorType(
+          background: '#FF00FF',
+          text: '#00FFFF',
+          border: '#00FFFF',
+        ),
+      ),
+    ),
+    logo: logo,
+  );
+}
+
+Configuration _buildPaymentSheetConfiguration() {
+  return Configuration(
+    displayDefaultSavedPaymentIcon: false,
+    paymentSheetHeaderLabel: "Payment methods",
+    savedPaymentSheetHeaderLabel: "Select payment method",
+    primaryButtonLabel: "Purchase (\$2.00)",
+    displayPayButton: true,
+    stickyPayButton: false,
+    splitCardFields: true,
+    locale: "en",
+    subscribedEvents: [
+      SubscriptionEvent.formStatus,
+      SubscriptionEvent.paymentMethodStatus,
+    ],
+    walletButtonsConfiguration: WalletButtonsConfiguration(
+      googlePay: GooglePayConfiguration(
+        visibility: WalletVisibility.hidden,
+        buttonType: GPayButtonType.donate,
+        buttonStyle: GPayButtonStyle(
+          light: GPayButtonStyleType.light,
+          dark: GPayButtonStyleType.light,
+        ),
+      ),
+      applePay: ApplePayConfiguration(
+        visibility: WalletVisibility.shown,
+        buttonType: ApplePayButtonType.donate,
+        buttonStyle: ApplePayButtonStyle(
+          light: ApplePayButtonStyleType.whiteOutline,
+          dark: ApplePayButtonStyleType.whiteOutline,
+        ),
+      ),
+    ),
+    paymentMethodLayout: PaymentMethodLayout(
+      type: Layout.accordion,
+      showOneClickWalletsOnTop: true,
+      radios: false,
+      maxAccordionItems: 1,
+      cvcIcon: CvcIconDisplay.hidden,
+      cardBrandIcon: CardBrandIconDisplay.standard,
+    ),
+    appearance: _buildNeonAppearance(
+      logo: LogoCustomization(
+        borderRadius: 8.0,
+        colors: LogoColorType(
+          light: LogoColors(
+            backgroundColor: "transparent",
+            selected: "#8DBD00",
+            unselected: "#CCCCCC",
+          ),
+          dark: LogoColors(
+            backgroundColor: "transparent",
+            selected: "#8DBD00",
+            unselected: "#444444",
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+String _errorMessage(Object error) {
+  return error is HyperswitchException ? error.message : error.toString();
+}
+
+String _requireSdkAuthorization(Map<String, dynamic> body) {
+  final sdkAuthorization = body['sdkAuthorization'];
+  if (sdkAuthorization is! String || sdkAuthorization.trim().isEmpty) {
+    throw const FormatException('Payment API did not return sdkAuthorization');
+  }
+  return sdkAuthorization;
+}
+
+Future<String> _fetchUpdatedSdkAuthorization(
+  String endpoint,
+  String paymentId,
+) async {
+  final response = await http.post(
+    Uri.parse('$endpoint/update-payment'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'paymentId': paymentId}),
+  );
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final error = body['error'];
+    final message = error is Map ? error['message'] : null;
+    throw Exception(message ?? 'Payment update failed');
+  }
+  return _requireSdkAuthorization(body);
+}
+
+Configuration _buildPaymentElementConfiguration() {
+  return Configuration(
+    displayDefaultSavedPaymentIcon: false,
+    splitCardFields: true,
+    hideConfirmButton: true,
+    subscribedEvents: [
+      SubscriptionEvent.formStatus,
+      SubscriptionEvent.paymentMethodStatus,
+    ],
+    paymentMethodLayout: PaymentMethodLayout(
+      type: Layout.accordion,
+      radios: false,
+      maxAccordionItems: 2,
+      defaultCollapsed: true,
+      spacedAccordionItems: true,
+      cvcIcon: CvcIconDisplay.hidden,
+      cardBrandIcon: CardBrandIconDisplay.hideGeneric,
+      showCheckedIconForSelection: true,
+      savedMethodCustomization: SavedMethodCustomization(
+        cvcIcon: CvcIconDisplay.hidden,
+        hideCardExpiry: true,
+        defaultCollapsed: false,
+        groupingBehavior: GroupingBehavior(displayInSeparateScreen: false),
+      ),
+    ),
+    appearance: _buildNeonAppearance(),
+  );
+}
+
+Configuration _buildCvcWidgetConfiguration() {
+  return Configuration(
+    placeholder: Placeholder(cvv: 'CVC'),
+    hideConfirmButton: true,
+    appearance: Appearance(
+      theme: Theme.dark,
+      font: Font(family: 'Montserrat', scale: 0.7),
+      colors: DynamicColors(
+        dark: ColorsObject(
+          primary: '#00FFFF',
+          background: '#1A0033',
+          overlay: '#000000CC',
+          primaryText: '#00FFFF',
+          secondaryText: '#FF00FF',
+          error: '#FF0000',
+          componentBackground: '#220044',
+          componentBorder: '#00FFFF',
+          componentText: '#00FFFF',
+          placeholderText: '#660066',
+          icon: '#00FFFF',
+          selectedComponentBackground: '#330066',
+          selectedComponentBorder: '#00FFFF',
+          selectedComponentBorderWidth: 2,
+        ),
+        light: ColorsObject(
+          primary: '#FF00FF',
+          background: '#00FFFF',
+          overlay: '#00000033',
+          primaryText: '#0000FF',
+          secondaryText: '#FF00FF',
+          error: '#FF0000',
+          componentBackground: '#00DDFF',
+          componentBorder: '#FF00FF',
+          componentText: '#0000FF',
+          placeholderText: '#FF99FF',
+          icon: '#FF00FF',
+          selectedComponentBackground: '#FFDDFF',
+          selectedComponentBorder: '#FF00FF',
+          selectedComponentBorderWidth: 2,
+        ),
+      ),
+      shapes: Shapes(
+        borderRadius: 0,
+        borderWidth: 2,
+        inputHeight: 56,
+        gap: 12,
+        shadow: Shadow(
+          color: '#00FFFF',
+          opacity: 0.4,
+          blurRadius: 6,
+          intensity: 0.6,
+          offset: Offset(x: 1, y: 1),
+        ),
+      ),
+      primaryButton: PrimaryButton(
+        height: 48,
+        shapes: Shapes(borderRadius: 0),
+        colors: PrimaryButtonColors(
+          light: PrimaryButtonColorType(
+            background: '#00FFFF',
+            text: '#FF00FF',
+            border: '#FF00FF',
+          ),
+          dark: PrimaryButtonColorType(
+            background: '#00FFFF',
+            text: '#FF00FF',
+            border: '#FF00FF',
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ─── Tab 1: Payment Sheet ──────────────────────────────────────────────────
+
+class PaymentSheetTab extends StatefulWidget {
+  final String endpoint;
+  const PaymentSheetTab({super.key, required this.endpoint});
+
+  @override
+  State<PaymentSheetTab> createState() => _PaymentSheetTabState();
+}
+
+class _PaymentSheetTabState extends State<PaymentSheetTab> {
+  final _hyper = FlutterHyperswitch();
+  Session? _sessionId;
+  bool _isInitialized = false;
+  String _statusText = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    setState(() {
+      _isInitialized = false;
+      _statusText = '';
+    });
+    try {
+      final response = await http.get(
+        Uri.parse("${widget.endpoint}/create-payment-intent"),
+      );
+      if (response.statusCode != 200) {
+        setState(() => _statusText = "API Call Failed");
+        return;
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      _hyper.init(
+        HyperConfig(
+          publishableKey: body['publishableKey'],
+          profileId: body['profileId'] as String?,
+        ),
+      );
+      final sdkAuth = _requireSdkAuthorization(body);
+      _sessionId = await _hyper.initPaymentSession(
+        PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
+      );
+      setState(() {
+        _isInitialized = _sessionId != null;
+      });
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    }
+  }
+
+  Future<void> _presentSheet() async {
+    if (_sessionId == null) return;
+    setState(() => _isInitialized = false);
+    try {
+      final result = await _hyper.presentPaymentSheet(
+        _sessionId!,
+        _buildPaymentSheetConfiguration(),
+        (event) {
+          debugPrint(
+            "PaymentEvent: ${event.eventName} payload=${event.payload}",
+          );
+        },
+      );
+      setState(() {
+        _statusText =
+            "${result.status.name}\n${result.message?.name ?? result.error.message}";
+      });
+      if (result.status != Status.cancelled) {
+        _init();
+      } else {
+        setState(() => _isInitialized = true);
+      }
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Payment Sheet Example",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _isInitialized ? _presentSheet : null,
+              child: Text(
+                _isInitialized ? "Open Payment Sheet" : "Loading ...",
               ),
-              Center(
-                child: ElevatedButton(
-                  onPressed: _isInitialized
-                      ? () {
-                          _presentPaymentSheet(false);
-                        }
-                      : null,
-                  child: Text(
-                    _isInitialized ? "Open Payment Sheet" : "Loading ...",
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _init,
+              child: const Text("Reload Client Secret"),
+            ),
+            const SizedBox(height: 16),
+            Text(_statusText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Tab 2: Headless + CvcWidget ─────────────────────────────────────────────
+
+class HeadlessTab extends StatefulWidget {
+  final String endpoint;
+  const HeadlessTab({super.key, required this.endpoint});
+
+  @override
+  State<HeadlessTab> createState() => _HeadlessTabState();
+}
+
+class _HeadlessTabState extends State<HeadlessTab> {
+  final _hyper = FlutterHyperswitch();
+  Elements? _elements;
+  String? _sdkAuthorization;
+  String? _paymentId;
+  SavedSession? _savedSession;
+  String _statusText = '';
+  String _resultText = '';
+  String _paymentMethodText = '';
+  bool _isInitialized = false;
+  bool _isUpdatingIntent = false;
+  bool _showConfirm = false;
+
+  final String _cvcWidgetId = 'cvc_headless_1';
+
+  Future<void> _init() async {
+    setState(() {
+      _isInitialized = false;
+      _statusText = '';
+      _resultText = '';
+      _paymentMethodText = '';
+      _showConfirm = false;
+    });
+    try {
+      final response = await http.get(
+        Uri.parse("${widget.endpoint}/create-payment-intent"),
+      );
+      if (response.statusCode != 200) {
+        setState(() => _statusText = "API Call Failed");
+        return;
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      _hyper.init(
+        HyperConfig(
+          publishableKey: body['publishableKey'],
+          profileId: body['profileId'] as String?,
+        ),
+      );
+      final sdkAuth = _requireSdkAuthorization(body);
+      final paymentId = body['paymentId'];
+      if (paymentId is! String || paymentId.isEmpty) {
+        throw const FormatException('Payment API did not return paymentId');
+      }
+      _sdkAuthorization = sdkAuth;
+      _paymentId = paymentId;
+      _elements = await _hyper.elements(
+        PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
+      );
+      _savedSession = await _hyper.getCustomerSavedPaymentMethods(
+        Session(sdkAuth),
+      );
+      final pm = await _hyper.getCustomerLastUsedPaymentMethodData(
+        _savedSession!,
+      );
+      if (pm is PaymentMethod) {
+        if (pm.paymentMethod == PaymentMethodType.card) {
+          final card = pm.card!;
+          setState(() {
+            _paymentMethodText =
+                "${card.nickName}  ${card.last4Digits}  ${card.expiryMonth}/${card.expiryYear}";
+            _showConfirm = true;
+          });
+        } else {
+          setState(() {
+            _paymentMethodText = pm.paymentMethodType;
+            _showConfirm = true;
+          });
+        }
+      } else if (pm is PaymentMethodError) {
+        setState(() => _statusText = pm.message);
+      }
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    }
+  }
+
+  Future<void> _confirm() async {
+    try {
+      final result = await _elements!.confirmWithLastUsedPaymentMethod(
+        widgetId: _cvcWidgetId,
+      );
+      setState(() {
+        _resultText =
+            "${result.status.name}\n${result.message?.name ?? result.error.message}";
+      });
+    } catch (error) {
+      setState(() => _resultText = _errorMessage(error));
+    }
+  }
+
+  Future<void> _updateIntent() async {
+    final elements = _elements;
+    final paymentId = _paymentId;
+    if (elements == null || paymentId == null) return;
+    setState(() => _isUpdatingIntent = true);
+    try {
+      final session = await elements.updateIntent(() async {
+        final sdkAuthorization = await _fetchUpdatedSdkAuthorization(
+          widget.endpoint,
+          paymentId,
+        );
+        return PaymentSessionConfiguration(sdkAuthorization: sdkAuthorization);
+      });
+      _sdkAuthorization = session.sessionData;
+      setState(() => _statusText = 'Intent updated');
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    } finally {
+      setState(() => _isUpdatingIntent = false);
+    }
+  }
+
+  Future<void> _change() async {
+    if (_sdkAuthorization == null) return;
+    try {
+      final result = await _hyper.presentPaymentSheet(
+        Session(_sdkAuthorization!),
+        _buildPaymentSheetConfiguration(),
+        (event) {
+          debugPrint(
+            "PaymentEvent: ${event.eventName} payload=${event.payload}",
+          );
+        },
+      );
+      setState(() {
+        _resultText =
+            "${result.status.name}\n${result.message?.name ?? result.error.message}";
+      });
+      if (result.status != Status.cancelled) {
+        _init();
+      }
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              "Headless SDK Example",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _isInitialized ? null : _init,
+              child: Text(_isInitialized ? "Initialized" : "Initialize"),
+            ),
+            const SizedBox(height: 16),
+            if (_isInitialized && _elements != null) ...[
+              if (_paymentMethodText.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(child: Text(_paymentMethodText)),
+                      if (_showConfirm)
+                        TextButton(
+                          onPressed: _change,
+                          child: const Text("Change"),
+                        ),
+                    ],
                   ),
                 ),
+              const Text(
+                "CVC Widget",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
-              Center(child: Text(_statusText)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                child: CvcWidget(
+                  elements: _elements!,
+                  widgetId: _cvcWidgetId,
+                  configuration: _buildCvcWidgetConfiguration(),
+                  onCvcEvent: (event) {
+                    debugPrint(
+                      "CVCWidget event: ${event.type} payload=${event.payload}",
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _isUpdatingIntent ? null : _updateIntent,
+                child: Text(
+                  _isUpdatingIntent ? 'Updating Intent...' : 'Update Intent',
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_showConfirm)
+                ElevatedButton(
+                  onPressed: _confirm,
+                  child: const Text("Confirm Payment"),
+                ),
+              const SizedBox(height: 16),
+              if (_resultText.isNotEmpty)
+                Text(
+                  _resultText,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
             ],
-          ),
+            if (_statusText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_statusText),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Tab 3: Widgets (PaymentElement) ────────────────────────────────────────
+
+class WidgetsTab extends StatefulWidget {
+  final String endpoint;
+  const WidgetsTab({super.key, required this.endpoint});
+
+  @override
+  State<WidgetsTab> createState() => _WidgetsTabState();
+}
+
+class _WidgetsTabState extends State<WidgetsTab> {
+  final _hyper = FlutterHyperswitch();
+  Elements? _elements;
+  String? _paymentId;
+  String _statusText = '';
+  String _resultText = '';
+  bool _isInitializing = false;
+  bool _isUpdatingIntent = false;
+  bool _elementsReady = false;
+
+  final String _paymentElementId = 'pe_widgets_1';
+
+  Future<void> _init() async {
+    setState(() {
+      _isInitializing = true;
+      _statusText = '';
+      _resultText = '';
+      _elementsReady = false;
+    });
+    try {
+      final response = await http.get(
+        Uri.parse("${widget.endpoint}/create-payment-intent"),
+      );
+      if (response.statusCode != 200) {
+        setState(() {
+          _statusText = "API Call Failed";
+          _isInitializing = false;
+        });
+        return;
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      _hyper.init(
+        HyperConfig(
+          publishableKey: body['publishableKey'],
+          profileId: body['profileId'] as String?,
+        ),
+      );
+      final sdkAuth = _requireSdkAuthorization(body);
+      final paymentId = body['paymentId'];
+      if (paymentId is! String || paymentId.isEmpty) {
+        throw const FormatException('Payment API did not return paymentId');
+      }
+      _paymentId = paymentId;
+      _elements = await _hyper.elements(
+        PaymentSessionConfiguration(sdkAuthorization: sdkAuth),
+      );
+      setState(() {
+        _elementsReady = true;
+      });
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    } finally {
+      setState(() => _isInitializing = false);
+    }
+  }
+
+  Future<void> _confirmPayment() async {
+    if (_elements == null) return;
+    try {
+      final result = await _elements!.confirmPayment(_paymentElementId);
+      setState(() {
+        _resultText =
+            "${result.status.name}\n${result.message?.name ?? result.error.message}";
+      });
+    } catch (error) {
+      setState(() => _resultText = "Confirm failed: $error");
+    }
+  }
+
+  Future<void> _updateIntent() async {
+    final elements = _elements;
+    final paymentId = _paymentId;
+    if (elements == null || paymentId == null) return;
+    setState(() => _isUpdatingIntent = true);
+    try {
+      await elements.updateIntent(() async {
+        final sdkAuthorization = await _fetchUpdatedSdkAuthorization(
+          widget.endpoint,
+          paymentId,
+        );
+        return PaymentSessionConfiguration(sdkAuthorization: sdkAuthorization);
+      });
+      setState(() => _statusText = 'Intent updated');
+    } catch (error) {
+      setState(() => _statusText = _errorMessage(error));
+    } finally {
+      setState(() => _isUpdatingIntent = false);
+    }
+  }
+
+  Future<void> _dispose() async {
+    await _elements?.destroyElement(_paymentElementId);
+    await _elements?.dispose();
+    _elements = null;
+    if (mounted) {
+      setState(() {
+        _elementsReady = false;
+        _statusText = '';
+        _resultText = '';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              onPressed: _isInitializing ? null : _init,
+              child: Text(
+                _isInitializing
+                    ? "Initializing..."
+                    : _elementsReady
+                    ? "Re-initialize"
+                    : "Initialize Elements",
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_elementsReady && _elements != null) ...[
+              const Text(
+                "Payment Element",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 300,
+                child: PaymentElement(
+                  elements: _elements!,
+                  widgetId: _paymentElementId,
+                  configuration: _buildPaymentElementConfiguration(),
+                  onPaymentEvent: (event) {
+                    debugPrint(
+                      "PaymentElement event: ${event.eventName} payload=${event.payload}",
+                    );
+                  },
+                  onPaymentResult: (result) {
+                    setState(() {
+                      _resultText =
+                          "${result.status.name}\n${result.message?.name ?? result.error.message}";
+                    });
+                  },
+                  onPaymentConfirmButtonClick: (data) async {
+                    debugPrint(
+                      "Payment confirm button click: ${data.paymentMethodType}",
+                    );
+                    return true;
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _isUpdatingIntent ? null : _updateIntent,
+                child: Text(
+                  _isUpdatingIntent ? 'Updating Intent...' : 'Update Intent',
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _confirmPayment,
+                child: const Text("Confirm Payment"),
+              ),
+              const Divider(height: 32),
+              TextButton(
+                onPressed: _dispose,
+                child: const Text("Dispose Elements"),
+              ),
+            ],
+            if (_statusText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_statusText),
+              ),
+            if (_resultText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _resultText,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
         ),
       ),
     );
