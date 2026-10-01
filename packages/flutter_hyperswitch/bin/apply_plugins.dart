@@ -7,6 +7,10 @@ class ApplyPlugins {
   static const String pathBuildGradle = 'android/build.gradle';
   static const String pathAppBuildGradle = 'android/app/build.gradle';
 
+  static const String gradlePluginVersion = '0.3.9';
+  static const String gradlePluginClasspath =
+      'classpath "io.hyperswitch:hyperswitch-gradle-plugin:$gradlePluginVersion"';
+
   static Future<void> start() async {
     print("Running for android");
 
@@ -39,14 +43,15 @@ class ApplyPlugins {
 
     // Add the buildscript block with mavenCentral and new classpath
     if (!content.contains('buildscript {')) {
-      content = '''
+      content =
+          '''
 buildscript {
     repositories {
         mavenCentral()
         google()
     }
     dependencies {
-        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.2"
+        $gradlePluginClasspath
     }
 }
 
@@ -64,12 +69,10 @@ $content''';
         );
         print('Added mavenCentral() to project-level build.gradle.');
       }
-      if (!content.contains(
-        'classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.2"',
-      )) {
+      if (!content.contains(gradlePluginClasspath)) {
         content = content.replaceFirst(
           'dependencies {',
-          'dependencies {\n        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.2"',
+          'dependencies {\n        $gradlePluginClasspath',
         );
         print('Updated project-level build.gradle with Hyperswitch classpath.');
       } else {

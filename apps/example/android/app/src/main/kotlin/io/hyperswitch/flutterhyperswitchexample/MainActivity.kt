@@ -1,6 +1,10 @@
 package io.hyperswitch.flutterhyperswitchexample
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
+import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 
-class MainActivity: FlutterActivity() {
+class MainActivity: FlutterFragmentActivity(), DefaultHardwareBackBtnHandler {
+    override fun invokeDefaultOnBackPressed() {
+        super.onBackPressed()
+    }
 }
