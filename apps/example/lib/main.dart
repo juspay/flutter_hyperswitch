@@ -144,9 +144,10 @@ Configuration _buildPaymentSheetConfiguration() {
     stickyPayButton: false,
     splitCardFields: true,
     locale: "en",
-    subscribedEvents: [
-      SubscriptionEvent.formStatus,
-      SubscriptionEvent.paymentMethodStatus,
+    subscriptionEvents: [
+      SubscriptionEvent.paymentMethodChange,
+      SubscriptionEvent.cardDetailsChange,
+      SubscriptionEvent.formStatusChange,
     ],
     walletButtonsConfiguration: WalletButtonsConfiguration(
       googlePay: GooglePayConfiguration(
@@ -229,9 +230,11 @@ Configuration _buildPaymentElementConfiguration() {
     displayDefaultSavedPaymentIcon: false,
     splitCardFields: true,
     hideConfirmButton: true,
-    subscribedEvents: [
-      SubscriptionEvent.formStatus,
-      SubscriptionEvent.paymentMethodStatus,
+    subscriptionEvents: [
+      SubscriptionEvent.paymentMethodChange,
+      SubscriptionEvent.cardDetailsChange,
+      SubscriptionEvent.formStatusChange,
+      SubscriptionEvent.billingDetailsChange,
     ],
     paymentMethodLayout: PaymentMethodLayout(
       type: Layout.accordion,
@@ -253,10 +256,35 @@ Configuration _buildPaymentElementConfiguration() {
   );
 }
 
+/// One `onChange` receives every subscribed event; branch on its name.
+void _logPaymentEvent(String source, PaymentEvent event) {
+  switch (event.eventName) {
+    case 'paymentMethodChange':
+      debugPrint(
+        "$source payment method: ${event.payload['paymentMethod']}/${event.payload['paymentMethodType']}",
+      );
+    case 'cardDetailsChange':
+      debugPrint(
+        "$source card: brand=${event.payload['brand']} complete=${event.payload['isCardNumberComplete']}",
+      );
+    case 'formStatusChange':
+      debugPrint("$source form status: ${event.payload['status']}");
+    case 'billingDetailsChange':
+      debugPrint(
+        "$source billing: ${event.payload['country']} ${event.payload['postalCode']}",
+      );
+    case 'cvcStatusChange':
+      debugPrint("$source cvc: ${event.payload}");
+    default:
+      debugPrint("$source ${event.eventName}: ${event.payload}");
+  }
+}
+
 Configuration _buildCvcWidgetConfiguration() {
   return Configuration(
     placeholder: Placeholder(cvv: 'CVC'),
     hideConfirmButton: true,
+    subscriptionEvents: [SubscriptionEvent.cvcStatusChange],
     appearance: Appearance(
       theme: Theme.dark,
       font: Font(family: 'Montserrat', scale: 0.7),
@@ -388,11 +416,7 @@ class _PaymentSheetTabState extends State<PaymentSheetTab> {
       final result = await _hyper.presentPaymentSheet(
         _sessionId!,
         _buildPaymentSheetConfiguration(),
-        (event) {
-          debugPrint(
-            "PaymentEvent: ${event.eventName} payload=${event.payload}",
-          );
-        },
+        (event) => _logPaymentEvent('PaymentSheet', event),
       );
       setState(() {
         _statusText =
@@ -572,11 +596,7 @@ class _HeadlessTabState extends State<HeadlessTab> {
       final result = await _hyper.presentPaymentSheet(
         Session(_sdkAuthorization!),
         _buildPaymentSheetConfiguration(),
-        (event) {
-          debugPrint(
-            "PaymentEvent: ${event.eventName} payload=${event.payload}",
-          );
-        },
+        (event) => _logPaymentEvent('PaymentSheet', event),
       );
       setState(() {
         _resultText =
@@ -635,11 +655,11 @@ class _HeadlessTabState extends State<HeadlessTab> {
                   elements: _elements!,
                   widgetId: _cvcWidgetId,
                   configuration: _buildCvcWidgetConfiguration(),
-                  onCvcEvent: (event) {
-                    debugPrint(
-                      "CVCWidget event: ${event.type} payload=${event.payload}",
-                    );
-                  },
+                  onChange: (event) => _logPaymentEvent('CvcWidget', event),
+                  // Lifecycle events need no subscription and never reach onChange.
+                  onReady: () => debugPrint('CvcWidget ready'),
+                  onFocus: () => debugPrint('CvcWidget focus'),
+                  onBlur: () => debugPrint('CvcWidget blur'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -825,11 +845,11 @@ class _WidgetsTabState extends State<WidgetsTab> {
                   elements: _elements!,
                   widgetId: _paymentElementId,
                   configuration: _buildPaymentElementConfiguration(),
-                  onPaymentEvent: (event) {
-                    debugPrint(
-                      "PaymentElement event: ${event.eventName} payload=${event.payload}",
-                    );
-                  },
+                  onChange: (event) =>
+                      _logPaymentEvent('PaymentElement', event),
+                  onReady: () => debugPrint('PaymentElement ready'),
+                  onFocus: () => debugPrint('PaymentElement focus'),
+                  onBlur: () => debugPrint('PaymentElement blur'),
                   onPaymentResult: (result) {
                     setState(() {
                       _resultText =

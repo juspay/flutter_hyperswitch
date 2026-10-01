@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' show VoidCallback;
 import 'package:flutter/services.dart';
 import 'flutter_hyperswitch_platform_interface.dart';
+import 'src/legacy_event_names.dart';
 import 'src/widget_registry.dart';
 import 'types.dart';
 export 'types.dart';
@@ -333,10 +335,13 @@ class FlutterHyperswitch {
     }
   }
 
+  /// Presents the payment sheet; events listed in `configuration.subscriptionEvents` go to [onChange].
+  /* [onChange] stays positional: Dart cannot mix optional positional and named parameters, and
+     existing callers pass the old event callback there. */
   Future<PaymentResult> presentPaymentSheet(
     Session session, [
     Configuration? configuration,
-    void Function(PaymentEvent)? onPaymentEvent,
+    void Function(PaymentEvent)? onChange,
   ]) async {
     final sessionChecker = _sessionMap[session.sessionData];
     if (sessionChecker == null ||
@@ -349,12 +354,21 @@ class FlutterHyperswitch {
 
     StreamSubscription? eventSubscription;
     try {
-      if (onPaymentEvent != null) {
+      if (onChange != null) {
+        final legacyNames = usesLegacySubscription(configuration);
         eventSubscription = _hyperswitchEvents.listen((event) {
           final map = event as Map<dynamic, dynamic>;
           // Widget-scoped events carry a widgetId and belong to Elements.
           if (map['widgetId'] != null) return;
-          onPaymentEvent(PaymentEvent.fromMap(map));
+          final paymentEvent = PaymentEvent.fromMap(map);
+          onChange(
+            legacyNames
+                ? PaymentEvent(
+                    eventName: legacyEventName(paymentEvent.eventName),
+                    payload: paymentEvent.payload,
+                  )
+                : paymentEvent,
+          );
         });
       }
 
@@ -427,6 +441,9 @@ class Elements {
   _onSessionUpdated;
   final Map<String, PaymentElementController> _paymentElementControllers = {};
   final Map<String, CvcWidgetController> _cvcWidgetControllers = {};
+  /* CVC widgets subscribed to `cvcStatusChange` only for the deprecated onCvcEvent; their CVC
+     status must not reach onChange, which the merchant did not subscribe. */
+  final Set<String> _cvcStatusForLegacyOnly = {};
   StreamSubscription? _eventSubscription;
   bool _updateIntentInProgress = false;
 
@@ -460,17 +477,67 @@ class Elements {
             }
             break;
           default:
-            controller.onPaymentEvent?.call(
+            if (_dispatchLifecycle(
+              type,
+              controller.onReady,
+              controller.onFocus,
+              controller.onBlur,
+            )) {
+              break;
+            }
+            controller.onChange?.call(
               PaymentEvent(eventName: type, payload: payload),
+            );
+            // ignore: deprecated_member_use_from_same_package
+            controller.onPaymentEvent?.call(
+              PaymentEvent(eventName: legacyEventName(type), payload: payload),
             );
         }
       } else if (_cvcWidgetControllers.containsKey(widgetId)) {
         final controller = _cvcWidgetControllers[widgetId]!;
+        if (_dispatchLifecycle(
+          type,
+          controller.onReady,
+          controller.onFocus,
+          controller.onBlur,
+        )) {
+          return;
+        }
+        if (!(type == SubscriptionEvent.cvcStatusChange.name &&
+            _cvcStatusForLegacyOnly.contains(widgetId))) {
+          controller.onChange?.call(
+            PaymentEvent(eventName: type, payload: payload),
+          );
+        }
+        // ignore: deprecated_member_use_from_same_package
         controller.onCvcEvent?.call(
-          CvcWidgetEvent(type: type, payload: payload),
+          // ignore: deprecated_member_use_from_same_package
+          CvcWidgetEvent(type: legacyEventName(type), payload: payload),
         );
       }
     });
+  }
+
+  // Returns whether [type] was a lifecycle event; those never reach onChange.
+  bool _dispatchLifecycle(
+    String type,
+    VoidCallback? onReady,
+    VoidCallback? onFocus,
+    VoidCallback? onBlur,
+  ) {
+    switch (type) {
+      case 'ready':
+        onReady?.call();
+        return true;
+      case 'focus':
+        onFocus?.call();
+        return true;
+      case 'blur':
+        onBlur?.call();
+        return true;
+      default:
+        return false;
+    }
   }
 
   Future<void> createElement({
@@ -504,10 +571,31 @@ class Elements {
 
     await _ensureEventListener();
 
+    /* The deprecated onCvcEvent always received CVC status; keep that by subscribing on its
+       behalf. onChange alone is opt-in, so it only sees CVC status the merchant listed. */
+    const cvcStatus = SubscriptionEvent.cvcStatusChange;
+    final subscribeForLegacyOnly =
+        // ignore: deprecated_member_use_from_same_package
+        cvcWidgetController?.onCvcEvent != null &&
+        !(configuration?.subscribesTo(cvcStatus) ?? false);
+    if (subscribeForLegacyOnly) {
+      _cvcStatusForLegacyOnly.add(widgetId);
+    } else {
+      _cvcStatusForLegacyOnly.remove(widgetId);
+    }
+    final extraEvents = subscribeForLegacyOnly ? const [cvcStatus] : const <SubscriptionEvent>[];
+    final configurationJson = configuration != null
+        ? configuration.toJson(extraEvents: extraEvents)
+        : extraEvents.isEmpty
+        ? null
+        : <String, dynamic>{
+            'subscriptionEvents': extraEvents.map((e) => e.name).toList(),
+          };
+
     final params = <String, dynamic>{
       'type': type,
       'widgetId': widgetId,
-      if (configuration != null) 'configuration': configuration.toJson(),
+      if (configurationJson != null) 'configuration': configurationJson,
     };
 
     const maxAttempts = 120;
@@ -648,6 +736,7 @@ class Elements {
       WidgetRegistry.unregister(widgetId);
       _paymentElementControllers.remove(widgetId);
       _cvcWidgetControllers.remove(widgetId);
+      _cvcStatusForLegacyOnly.remove(widgetId);
     } catch (error) {
       return Future.error(
         HyperswitchException(
@@ -701,5 +790,6 @@ class Elements {
     _eventSubscription = null;
     _paymentElementControllers.clear();
     _cvcWidgetControllers.clear();
+    _cvcStatusForLegacyOnly.clear();
   }
 }

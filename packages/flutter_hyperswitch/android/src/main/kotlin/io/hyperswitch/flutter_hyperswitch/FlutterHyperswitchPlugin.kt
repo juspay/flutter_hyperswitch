@@ -18,6 +18,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.EventChannel
+import io.hyperswitch.PaymentEventListener
 import io.hyperswitch.model.CustomEndpointConfiguration
 import io.hyperswitch.model.ElementsUpdateResult
 import io.hyperswitch.model.HyperswitchConfiguration
@@ -25,9 +26,6 @@ import io.hyperswitch.model.HyperswitchEnvironment
 import io.hyperswitch.model.OverrideEndpoints
 import io.hyperswitch.model.PaymentSessionConfiguration
 import io.hyperswitch.paymentsheet.PaymentResult
-import io.hyperswitch.PaymentEvents
-import io.hyperswitch.PaymentEventSubscriptionBuilder
-import io.hyperswitch.CvcWidgetEvents
 import io.hyperswitch.paymentsession.PaymentSessionHandler
 import io.hyperswitch.paymentsession.PMError
 import io.hyperswitch.sdk.Elements
@@ -407,7 +405,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                         if (key != null && value != null) configMap[key.toString()] = value
                     }
                 }
-                val subscribedEvents = (configMap.remove("subscribedEvents") as? List<*>) ?: emptyList<String>()
+                // `subscriptionEvents` stays in the map; the SDK normalizes it for the bundle.
 
                 activity.runOnUiThread {
                     try {
@@ -419,25 +417,9 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                         }
 
                         if (type == "paymentElement" || type == "payment") {
-                            val bound = els.bind(hsElement, configMap) {
-                                if (subscribedEvents.contains("FORM_STATUS"))
-                                    on(PaymentEvents.FormStatus) { event ->
-                                        emitWidgetEvent(widgetId, "FORM_STATUS", event.payload)
-                                    }
-                                if (subscribedEvents.contains("PAYMENT_METHOD_STATUS"))
-                                    on(PaymentEvents.PaymentMethodStatus) { event ->
-                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_STATUS", event.payload)
-                                    }
-                                if (subscribedEvents.contains("PAYMENT_METHOD_INFO_CARD"))
-                                    on(PaymentEvents.PaymentMethodInfoCard) { event ->
-                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_CARD", event.payload)
-                                    }
-                                if (subscribedEvents.contains("PAYMENT_METHOD_INFO_BILLING_ADDRESS"))
-                                    on(PaymentEvents.PaymentMethodInfoBillingAddress) { event ->
-                                        emitWidgetEvent(widgetId, "PAYMENT_METHOD_INFO_BILLING_ADDRESS", event.payload)
-                                    }
-                            }
+                            val bound = els.bind(hsElement, configMap)
                             boundElements[widgetId] = bound
+                            forwardElementEvents(hsElement, widgetId)
                             bound.onPaymentResult { paymentResult ->
                                 val resultMap = HashMap<String, Any>()
                                 when (paymentResult) {
@@ -463,12 +445,9 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                                 emitWidgetEvent(widgetId, "onPaymentConfirmButtonClick", payloadMap)
                             }
                         } else if (type == "cvcWidget" || type == "cvc") {
-                            val bound = els.bind(hsElement, configMap) {
-                                on(CvcWidgetEvents.CvcStatus) { event ->
-                                    emitWidgetEvent(widgetId, "CVC_STATUS", event.payload)
-                                }
-                            }
+                            val bound = els.bind(hsElement, configMap)
                             boundElements[widgetId] = bound
+                            forwardElementEvents(hsElement, widgetId)
                         } else {
                             val map = HashMap<String, Any>()
                             map["type"] = "failed"
@@ -574,19 +553,11 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 } else {
                     paymentSheetResult = result
                     val presentParams = buildPaymentSheetParams()
-                    val configuration = presentParams["configuration"] as? HashMap<*, *>
-                    val subscribedEvents = configuration?.get("subscribedEvents") as? List<*> ?: emptyList<String>()
-                    paymentSession?.presentPaymentSheet(presentParams, {
-                        if (subscribedEvents.contains("PAYMENT_METHOD_INFO_CARD"))
-                            on(PaymentEvents.PaymentMethodInfoCard) { event -> emitEvent(event.type, event.payload) }
-                        if (subscribedEvents.contains("PAYMENT_METHOD_STATUS"))
-                            on(PaymentEvents.PaymentMethodStatus) { event -> emitEvent(event.type, event.payload) }
-                        if (subscribedEvents.contains("FORM_STATUS"))
-                            on(PaymentEvents.FormStatus) { event -> emitEvent(event.type, event.payload) }
-                        if (subscribedEvents.contains("PAYMENT_METHOD_INFO_BILLING_ADDRESS"))
-                            on(PaymentEvents.PaymentMethodInfoBillingAddress) { event -> emitEvent(event.type, event.payload) }
-                    }, ::onPaymentSheetResult)
-                        ?: callBackHandler(result, defaultMap)
+                    paymentSession?.presentPaymentSheet(
+                        presentParams,
+                        onChange = { event -> emitEvent(event.eventName, event.payload) },
+                        resultCallback = ::onPaymentSheetResult,
+                    ) ?: callBackHandler(result, defaultMap)
                 }
             }
 
@@ -601,13 +572,23 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         eventSink = null
     }
 
-    private fun emitEvent(eventType: String, payload: Map<String, Any>) {
-        val map = HashMap<String, Any>()
+    private fun emitEvent(eventType: String, payload: Map<String, Any?>) {
+        val map = HashMap<String, Any?>()
         map["eventName"] = eventType
         map["payload"] = payload
         activity.runOnUiThread {
             eventSink?.success(map)
         }
+    }
+
+    // Change and lifecycle events travel as widget events typed by name; Dart routes the lifecycle ones.
+    private fun forwardElementEvents(element: io.hyperswitch.view.HyperswitchElement, widgetId: String) {
+        element.onChange(PaymentEventListener { event ->
+            emitWidgetEvent(widgetId, event.eventName, event.payload)
+        })
+        element.onReady { emitWidgetEvent(widgetId, "ready", emptyMap<String, Any>()) }
+        element.onFocus { emitWidgetEvent(widgetId, "focus", emptyMap<String, Any>()) }
+        element.onBlur { emitWidgetEvent(widgetId, "blur", emptyMap<String, Any>()) }
     }
 
     private fun emitWidgetEvent(widgetId: String, type: String, payload: Any?) {

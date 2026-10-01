@@ -77,18 +77,35 @@ class PaymentElement extends StatefulWidget {
   final Elements elements;
   final String widgetId;
   final Configuration? configuration;
+
+  /// Receives every event listed in `configuration.subscriptionEvents`.
+  final void Function(PaymentEvent)? onChange;
+  @Deprecated('Use onChange')
   final void Function(PaymentEvent)? onPaymentEvent;
   final void Function(PaymentResult)? onPaymentResult;
   final Future<bool> Function(PaymentRequestData)? onPaymentConfirmButtonClick;
+
+  /// Fires once the element has loaded. No subscription needed.
+  final VoidCallback? onReady;
+
+  /// Fires when focus enters the element, not when moving between its fields.
+  final VoidCallback? onFocus;
+
+  /// Fires when focus leaves the element, not when moving between its fields.
+  final VoidCallback? onBlur;
 
   const PaymentElement({
     super.key,
     required this.elements,
     required this.widgetId,
     this.configuration,
-    this.onPaymentEvent,
+    this.onChange,
+    @Deprecated('Use onChange') this.onPaymentEvent,
     this.onPaymentResult,
     this.onPaymentConfirmButtonClick,
+    this.onReady,
+    this.onFocus,
+    this.onBlur,
   });
 
   @override
@@ -111,11 +128,19 @@ class _PaymentElementState extends State<PaymentElement> {
         type: 'paymentElement',
         widgetId: widget.widgetId,
         configuration: widget.configuration,
+        /* Callbacks read `widget` when they fire, so a rebuilt widget's new handlers apply.
+           Native always awaits the confirm-click answer; with no handler it proceeds. */
         paymentElementController: PaymentElementController(
           widgetId: widget.widgetId,
-          onPaymentEvent: widget.onPaymentEvent,
-          onPaymentResult: widget.onPaymentResult,
-          onPaymentConfirmButtonClick: widget.onPaymentConfirmButtonClick,
+          onChange: (event) => widget.onChange?.call(event),
+          // ignore: deprecated_member_use_from_same_package
+          onPaymentEvent: (event) => widget.onPaymentEvent?.call(event),
+          onPaymentResult: (result) => widget.onPaymentResult?.call(result),
+          onPaymentConfirmButtonClick: (data) async =>
+              await widget.onPaymentConfirmButtonClick?.call(data) ?? true,
+          onReady: () => widget.onReady?.call(),
+          onFocus: () => widget.onFocus?.call(),
+          onBlur: () => widget.onBlur?.call(),
         ),
       );
     } catch (_) {}
@@ -138,14 +163,32 @@ class CvcWidget extends StatefulWidget {
   final Elements elements;
   final String widgetId;
   final Configuration? configuration;
+
+  /// Receives `cvcStatusChange` when it is listed in `configuration.subscriptionEvents`.
+  final void Function(PaymentEvent)? onChange;
+  @Deprecated('Use onChange')
+  // ignore: deprecated_member_use_from_same_package
   final void Function(CvcWidgetEvent)? onCvcEvent;
+
+  /// Fires once the element has loaded. No subscription needed.
+  final VoidCallback? onReady;
+
+  /// Fires when focus enters the element, not when moving between its fields.
+  final VoidCallback? onFocus;
+
+  /// Fires when focus leaves the element, not when moving between its fields.
+  final VoidCallback? onBlur;
 
   const CvcWidget({
     super.key,
     required this.elements,
     required this.widgetId,
     this.configuration,
-    this.onCvcEvent,
+    this.onChange,
+    @Deprecated('Use onChange') this.onCvcEvent,
+    this.onReady,
+    this.onFocus,
+    this.onBlur,
   });
 
   @override
@@ -168,9 +211,19 @@ class _CvcWidgetState extends State<CvcWidget> {
         type: 'cvcWidget',
         widgetId: widget.widgetId,
         configuration: widget.configuration,
+        /* Callbacks read `widget` when they fire, so a rebuilt widget's new handlers apply.
+           Whether onCvcEvent is set is fixed at creation: it decides the CVC status subscription. */
         cvcWidgetController: CvcWidgetController(
           widgetId: widget.widgetId,
-          onCvcEvent: widget.onCvcEvent,
+          onChange: (event) => widget.onChange?.call(event),
+          // ignore: deprecated_member_use_from_same_package
+          onCvcEvent: widget.onCvcEvent == null
+              ? null
+              // ignore: deprecated_member_use_from_same_package
+              : (event) => widget.onCvcEvent?.call(event),
+          onReady: () => widget.onReady?.call(),
+          onFocus: () => widget.onFocus?.call(),
+          onBlur: () => widget.onBlur?.call(),
         ),
       );
     } catch (_) {}

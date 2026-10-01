@@ -29,7 +29,6 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
     private var containers: [String: WidgetContainerView] = [:]
     private var paymentWidgets: [String: PaymentWidget] = [:]
     private var cvcWidgets: [String: CVCWidget] = [:]
-    private var widgetConfigs: [String: (type: String, configuration: [String: Any]?)] = [:]
     private var pendingConfirmCallbacks: [String: (Bool) -> Void] = [:]
     private var pendingConfirmResults: [String: FlutterResult] = [:]
 
@@ -70,6 +69,16 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
     }
 
     // MARK: - Event emission
+
+    /// Change and lifecycle events travel as widget events typed by name; Dart routes the lifecycle ones.
+    private func forwardElementEvents(_ element: ElementEventSource, _ widgetId: String) {
+        element.onChange { [weak self] event in
+            self?.emitWidgetEvent(widgetId, event.eventName, event.payload)
+        }
+        element.onReady { [weak self] in self?.emitWidgetEvent(widgetId, "ready", [:]) }
+        element.onFocus { [weak self] in self?.emitWidgetEvent(widgetId, "focus", [:]) }
+        element.onBlur { [weak self] in self?.emitWidgetEvent(widgetId, "blur", [:]) }
+    }
 
     private func emitWidgetEvent(_ widgetId: String, _ type: String, _ payload: [String: Any]) {
         DispatchQueue.main.async {
@@ -124,40 +133,6 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
         return top
     }
 
-    private func subscribedEvents(from configuration: [String: Any]?) -> [String] {
-        guard let raw = configuration?["subscribedEvents"] else { return [] }
-        if let arr = raw as? [String] { return arr }
-        if let arr = raw as? [Any] { return arr.compactMap { $0 as? String } }
-        return []
-    }
-
-    private func bindPaymentEvents(
-        builder: PaymentEventSubscriptionBuilder,
-        subscribed: [String],
-        emit: @escaping (String, [String: Any]) -> Void
-    ) {
-        if subscribed.contains(PaymentEventType.formStatus.rawValue) {
-            builder.on(.formStatus) { event in
-                emit(PaymentEventType.formStatus.rawValue, event.payload)
-            }
-        }
-        if subscribed.contains(PaymentEventType.paymentMethodStatus.rawValue) {
-            builder.on(.paymentMethodStatus) { event in
-                emit(PaymentEventType.paymentMethodStatus.rawValue, event.payload)
-            }
-        }
-        if subscribed.contains(PaymentEventType.paymentMethodInfoCard.rawValue) {
-            builder.on(.paymentMethodInfoCard) { event in
-                emit(PaymentEventType.paymentMethodInfoCard.rawValue, event.payload)
-            }
-        }
-        if subscribed.contains(PaymentEventType.paymentMethodInfoBillingAddress.rawValue) {
-            builder.on(.paymentMethodInfoBillingAddress) { event in
-                emit(PaymentEventType.paymentMethodInfoBillingAddress.rawValue, event.payload)
-            }
-        }
-    }
-
     // MARK: - Element binding
 
     /// Creates (or re-creates) the SDK widget for `widgetId` and attaches it
@@ -168,7 +143,7 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
         widgetId: String,
         configuration: [String: Any]?
     ) -> [String: Any] {
-        guard elementsInitialised, let paymentSession = paymentSession, let hyperswitch = hyperswitch else {
+        guard elementsInitialised, let paymentSession = paymentSession else {
             return failedMap("elements() not called")
         }
         guard let container = containers[widgetId] else {
@@ -177,9 +152,8 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
 
         registerCustomFonts(configuration: configuration)
 
-        var configMap = configuration ?? [:]
-        let subscribed = subscribedEvents(from: configuration)
-        configMap.removeValue(forKey: "subscribedEvents")
+        // `subscriptionEvents` stays in the map; the SDK normalizes it for the bundle.
+        let configMap = configuration ?? [:]
 
         // Re-create: drop any previous binding for this widgetId.
         paymentWidgets.removeValue(forKey: widgetId)
@@ -205,13 +179,9 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
                         }
                         self.emitWidgetEvent(widgetId, "onPaymentResult", dict)
                     }
-                },
-                subscribe: { [weak self] builder in
-                    self?.bindPaymentEvents(builder: builder, subscribed: subscribed) { type, payload in
-                        self?.emitWidgetEvent(widgetId, type, payload)
-                    }
                 }
             )
+            forwardElementEvents(widget, widgetId)
             widget.shouldProceedWithPayment { [weak self] data, callback in
                 DispatchQueue.main.async {
                     guard let self = self else { return }
@@ -222,25 +192,16 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
             }
             container.hostedWidget = widget
             paymentWidgets[widgetId] = widget
-            widgetConfigs[widgetId] = (type: type, configuration: configuration)
             return ["type": "success"]
 
         } else if type == "cvcWidget" || type == "cvc" {
             guard container is CvcWidgetContainerView else {
                 return failedMap("PlatformView for widgetId=\(widgetId) is not a CvcWidget")
             }
-            let widget = CVCWidget(
-                hyperswitch: hyperswitch,
-                configurationDict: configMap,
-                subscribe: { [weak self] builder in
-                    builder.on(.cvcStatus) { event in
-                        self?.emitWidgetEvent(widgetId, PaymentEventType.cvcStatus.rawValue, event.payload)
-                    }
-                }
-            )
+            let widget = CVCWidget(configurationDict: configMap)
+            forwardElementEvents(widget, widgetId)
             container.hostedWidget = widget
             cvcWidgets[widgetId] = widget
-            widgetConfigs[widgetId] = (type: type, configuration: configuration)
             return ["type": "success"]
 
         } else {
@@ -248,14 +209,6 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    /// The SDK's `updateIntent` swaps the session authorization but never
-    /// notifies mounted widgets (its internal init/complete flow is disabled),
-    /// so re-attach every bound widget — a fresh widget reads the updated
-    /// authorization from the session.
-    private func refreshBoundElements() {
-        for (widgetId, info) in widgetConfigs where containers[widgetId] != nil {
-            _ = attachElement(type: info.type, widgetId: widgetId, configuration: info.configuration)
-        }
     }
 
     // MARK: - Custom fonts
@@ -498,7 +451,6 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
             let widgetId = arguments?["widgetId"] as? String ?? ""
             paymentWidgets.removeValue(forKey: widgetId)
             cvcWidgets.removeValue(forKey: widgetId)
-            widgetConfigs.removeValue(forKey: widgetId)
             pendingConfirmCallbacks.removeValue(forKey: widgetId)
             pendingConfirmResults.removeValue(forKey: widgetId)
             containers[widgetId]?.hostedWidget = nil
@@ -525,15 +477,12 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
             // The SDK nests these params under props.configuration itself,
             // so pass the configuration map only.
             let configuration = params["configuration"] as? [String: Any] ?? [:]
-            let subscribed = subscribedEvents(from: configuration)
 
             paymentSession.presentPaymentSheetWithParams(
                 viewController: viewController,
                 params: configuration,
-                subscribe: { [weak self] builder in
-                    self?.bindPaymentEvents(builder: builder, subscribed: subscribed) { type, payload in
-                        self?.emitSheetEvent(type, payload)
-                    }
+                onChange: { [weak self] event in
+                    self?.emitSheetEvent(event.eventName, event.payload)
                 },
                 completion: { [weak self] paymentResult in
                     guard let self = self else { return }
@@ -678,7 +627,6 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
                         DispatchQueue.main.async {
                             switch updateResult {
                             case .success:
-                                self.refreshBoundElements()
                                 result(["type": "success"])
                             case .cancelled:
                                 result(self.failedMap("Update intent cancelled"))
@@ -709,3 +657,14 @@ extension FlutterHyperswitchPlugin: FlutterStreamHandler {
         return nil
     }
 }
+
+/// The SDK widgets' event handlers, so one forwarder serves both element kinds.
+private protocol ElementEventSource: AnyObject {
+    func onChange(_ handler: @escaping (PaymentEvent) -> Void)
+    func onReady(_ handler: @escaping () -> Void)
+    func onFocus(_ handler: @escaping () -> Void)
+    func onBlur(_ handler: @escaping () -> Void)
+}
+
+extension PaymentWidget: ElementEventSource {}
+extension CVCWidget: ElementEventSource {}

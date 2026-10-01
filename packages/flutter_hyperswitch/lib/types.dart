@@ -1,3 +1,5 @@
+import 'dart:ui' show VoidCallback;
+
 
 /// A class representing parameters for the Hyperswitch configuration.
 class HyperConfig {
@@ -136,6 +138,9 @@ class Configuration {
   bool? stickyPayButton;
   bool? preloadCardElement;
   String? locale;
+  /// Events delivered to `onChange`; nothing is emitted for events not listed.
+  List<SubscriptionEvent>? subscriptionEvents;
+  @Deprecated('Use subscriptionEvents')
   List<SubscriptionEvent>? subscribedEvents;
   RedirectionInfo? redirectionInfo;
   bool? alwaysSendCustomerAcceptance;
@@ -173,7 +178,8 @@ class Configuration {
     this.stickyPayButton,
     this.preloadCardElement,
     this.locale,
-    this.subscribedEvents,
+    this.subscriptionEvents,
+    @Deprecated('Use subscriptionEvents') this.subscribedEvents,
     this.redirectionInfo,
     this.alwaysSendCustomerAcceptance,
     this.opensCardScannerAutomatically,
@@ -189,7 +195,21 @@ class Configuration {
     this.hideConfirmButton,
   });
 
-  Map<String, dynamic> toJson() {
+  Set<SubscriptionEvent> get _allSubscriptionEvents => {
+    ...?subscriptionEvents,
+    // ignore: deprecated_member_use_from_same_package
+    ...?subscribedEvents,
+  };
+
+  /// Whether [event] is listed in `subscriptionEvents` (or the deprecated `subscribedEvents`).
+  bool subscribesTo(SubscriptionEvent event) =>
+      _allSubscriptionEvents.contains(event);
+
+  /// [extraEvents] are subscribed on the merchant's behalf, on top of their own list.
+  Map<String, dynamic> toJson({
+    Iterable<SubscriptionEvent> extraEvents = const [],
+  }) {
+    final events = {..._allSubscriptionEvents, ...extraEvents};
     return {
       'appearance': appearance?.toJson(),
       'allowsDelayedPaymentMethods': allowsDelayedPaymentMethods,
@@ -213,7 +233,8 @@ class Configuration {
       'stickyPayButton': stickyPayButton,
       'preloadCardElement': preloadCardElement,
       'locale': locale,
-      'subscribedEvents': subscribedEvents?.map((e) => e.name).toList(),
+      'subscriptionEvents':
+          events.isEmpty ? null : events.map((e) => e.name).toList(),
       'redirectionInfo': redirectionInfo?.name,
       'alwaysSendCustomerAcceptance': alwaysSendCustomerAcceptance,
       'opensCardScannerAutomatically': opensCardScannerAutomatically,
@@ -1377,39 +1398,36 @@ class ApplePayParams {
   }
 }
 
-/// Enum representing subscription events for the payment sheet.
+/// Events a merchant can list in [Configuration.subscriptionEvents]. The
+/// enum value's `name` is the wire name, which is also [PaymentEvent.eventName].
 enum SubscriptionEvent {
-  paymentMethodInfoCard,
-  paymentMethodStatus,
-  formStatus,
-  paymentMethodInfoBillingAddress,
+  cardDetailsChange,
+  paymentMethodChange,
+  formStatusChange,
+  billingDetailsChange,
 
-  /// Emitted by [CvcWidget] unconditionally; listing it in
-  /// [Configuration.subscribedEvents] is not required.
-  cvcStatus;
+  /// Emitted by [CvcWidget].
+  cvcStatusChange;
 
-  String get name {
-    switch (this) {
-      case SubscriptionEvent.paymentMethodInfoCard:
-        return 'PAYMENT_METHOD_INFO_CARD';
-      case SubscriptionEvent.paymentMethodStatus:
-        return 'PAYMENT_METHOD_STATUS';
-      case SubscriptionEvent.formStatus:
-        return 'FORM_STATUS';
-      case SubscriptionEvent.paymentMethodInfoBillingAddress:
-        return 'PAYMENT_METHOD_INFO_BILLING_ADDRESS';
-      case SubscriptionEvent.cvcStatus:
-        return 'CVC_STATUS';
-    }
-  }
+  @Deprecated('Use cardDetailsChange')
+  static const paymentMethodInfoCard = cardDetailsChange;
+  @Deprecated('Use paymentMethodChange')
+  static const paymentMethodStatus = paymentMethodChange;
+  @Deprecated('Use formStatusChange')
+  static const formStatus = formStatusChange;
+  @Deprecated('Use billingDetailsChange')
+  static const paymentMethodInfoBillingAddress = billingDetailsChange;
+  @Deprecated('Use cvcStatusChange')
+  static const cvcStatus = cvcStatusChange;
 }
 
-/// Represents a payment event received from the payment sheet.
+/// Delivered to `onChange`; switch on [eventName] (a [SubscriptionEvent] name).
 class PaymentEvent {
   final String eventName;
-  final Map<String, dynamic>? payload;
+  final Map<String, dynamic> payload;
 
-  PaymentEvent({required this.eventName, this.payload});
+  PaymentEvent({required this.eventName, Map<String, dynamic>? payload})
+    : payload = payload ?? <String, dynamic>{};
 
   factory PaymentEvent.fromMap(Map<dynamic, dynamic> map) {
     return PaymentEvent(
@@ -1847,6 +1865,7 @@ class PaymentRequestData {
 }
 
 /// Event emitted by [CvcWidgetController.onCvcEvent].
+@Deprecated('Use PaymentEvent with CvcWidget.onChange')
 class CvcWidgetEvent {
   final String type;
   final Map<String, dynamic> payload;
@@ -1866,25 +1885,48 @@ class CvcWidgetEvent {
 /// Controls a PaymentElement widget after it has been created.
 class PaymentElementController {
   final String widgetId;
+  final void Function(PaymentEvent)? onChange;
+  @Deprecated('Use onChange')
   final void Function(PaymentEvent)? onPaymentEvent;
   final void Function(PaymentResult)? onPaymentResult;
   final Future<bool> Function(PaymentRequestData)? onPaymentConfirmButtonClick;
 
+  /// Lifecycle callbacks: need no subscription and never reach [onChange].
+  final VoidCallback? onReady;
+  final VoidCallback? onFocus;
+  final VoidCallback? onBlur;
+
   PaymentElementController({
     required this.widgetId,
-    this.onPaymentEvent,
+    this.onChange,
+    @Deprecated('Use onChange') this.onPaymentEvent,
     this.onPaymentResult,
     this.onPaymentConfirmButtonClick,
+    this.onReady,
+    this.onFocus,
+    this.onBlur,
   });
 }
 
 /// Controls a CvcWidget after it has been created.
 class CvcWidgetController {
   final String widgetId;
+  final void Function(PaymentEvent)? onChange;
+  @Deprecated('Use onChange')
+  // ignore: deprecated_member_use_from_same_package
   final void Function(CvcWidgetEvent)? onCvcEvent;
+
+  /// Lifecycle callbacks: need no subscription and never reach [onChange].
+  final VoidCallback? onReady;
+  final VoidCallback? onFocus;
+  final VoidCallback? onBlur;
 
   CvcWidgetController({
     required this.widgetId,
-    this.onCvcEvent,
+    this.onChange,
+    @Deprecated('Use onChange') this.onCvcEvent,
+    this.onReady,
+    this.onFocus,
+    this.onBlur,
   });
 }
