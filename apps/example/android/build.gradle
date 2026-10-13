@@ -4,9 +4,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.2.8-patch.2"       
-           
-          
+        classpath "io.hyperswitch:hyperswitch-gradle-plugin:0.3.9"
     }
 }
 

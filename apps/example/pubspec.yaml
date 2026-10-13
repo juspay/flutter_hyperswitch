@@ -140,3 +140,7 @@ flutter:
           weight: 100
           style: italic
 
+    - family: PressStart2P
+      fonts:
+        - asset: fonts/PressStart2P-Regular.ttf
+

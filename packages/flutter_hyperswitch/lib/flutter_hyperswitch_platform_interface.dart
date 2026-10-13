@@ -1,6 +1,8 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'flutter_hyperswitch_method_channel.dart';
 
+typedef PlatformIntentResolver = Future<Map<String, dynamic>> Function();
+
 /// An abstract class representing the platform interface for Flutter Hyperswitch.
 abstract class FlutterHyperswitchPlatform extends PlatformInterface {
   /// Constructs a FlutterHyperswitchPlatform.
@@ -43,7 +45,9 @@ abstract class FlutterHyperswitchPlatform extends PlatformInterface {
   /// Presents the payment sheet.
   ///
   /// Throws an [UnimplementedError] if the method is not implemented.
-  Future<Map<String, dynamic>?> presentPaymentSheet() {
+  Future<Map<String, dynamic>?> presentPaymentSheet(
+    Map<String, dynamic> params,
+  ) {
     throw UnimplementedError('presentPaymentSheet() has not been implemented.');
   }
 
@@ -65,15 +69,6 @@ abstract class FlutterHyperswitchPlatform extends PlatformInterface {
     );
   }
 
-  /// Presents the payment sheet.
-  ///
-  /// Throws an [UnimplementedError] if the method is not implemented.
-  Future<Map<String, dynamic>?> confirmWithCustomerDefaultPaymentMethod() {
-    throw UnimplementedError(
-      'confirmWithCustomerDefaultPaymentMethod() has not been implemented.',
-    );
-  }
-
   /// Get Customer Last Used Payment Methods.
   ///
   /// Throws an [UnimplementedError] if the method is not implemented.
@@ -83,10 +78,65 @@ abstract class FlutterHyperswitchPlatform extends PlatformInterface {
     );
   }
 
-  /// Confirm with Customer Last Used Payment Methods.
+  /// Confirm with Customer Payment Token.
   ///
   /// Throws an [UnimplementedError] if the method is not implemented.
-  Future<Map<String, dynamic>?> confirmWithLastUsedPaymentMethod() {
+  Future<Map<String, dynamic>?> confirmWithCustomerPaymentToken(
+    String paymentToken,
+  ) {
+    throw UnimplementedError(
+      'confirmWithCustomerPaymentToken() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> updateIntent(String sdkAuthorization) {
+    throw UnimplementedError('updateIntent() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> updateElementsIntent(
+    PlatformIntentResolver intentResolver,
+  ) {
+    throw UnimplementedError(
+      'updateElementsIntent() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> elements(Map<String, dynamic> params) {
+    throw UnimplementedError('elements() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> createElement(Map<String, dynamic> params) {
+    throw UnimplementedError('createElement() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> confirmPayment(String widgetId) {
+    throw UnimplementedError('confirmPayment() has not been implemented.');
+  }
+
+  Future<void> resolvePaymentConfirmButtonClick(
+    String widgetId,
+    bool proceed,
+  ) {
+    throw UnimplementedError(
+      'resolvePaymentConfirmButtonClick() has not been implemented.',
+    );
+  }
+
+  Future<void> destroyElement(String widgetId) {
+    throw UnimplementedError('destroyElement() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> confirmWithCustomerDefaultPaymentMethod([
+    String? widgetId,
+  ]) {
+    throw UnimplementedError(
+      'confirmWithCustomerDefaultPaymentMethod() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> confirmWithLastUsedPaymentMethod([
+    String? widgetId,
+  ]) {
     throw UnimplementedError(
       'confirmWithLastUsedPaymentMethod() has not been implemented.',
     );
