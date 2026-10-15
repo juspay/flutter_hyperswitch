@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui' show VoidCallback;
 import 'package:flutter/services.dart';
 import 'flutter_hyperswitch_platform_interface.dart';
-import 'src/legacy_event_names.dart';
 import 'src/widget_registry.dart';
 import 'types.dart';
 export 'types.dart';
@@ -336,8 +335,6 @@ class FlutterHyperswitch {
   }
 
   /// Presents the payment sheet; events listed in `configuration.subscriptionEvents` go to [onChange].
-  /* [onChange] stays positional: Dart cannot mix optional positional and named parameters, and
-     existing callers pass the old event callback there. */
   Future<PaymentResult> presentPaymentSheet(
     Session session, [
     Configuration? configuration,
@@ -355,20 +352,12 @@ class FlutterHyperswitch {
     StreamSubscription? eventSubscription;
     try {
       if (onChange != null) {
-        final legacyNames = usesLegacySubscription(configuration);
         eventSubscription = _hyperswitchEvents.listen((event) {
           final map = event as Map<dynamic, dynamic>;
           // Widget-scoped events carry a widgetId and belong to Elements.
           if (map['widgetId'] != null) return;
           final paymentEvent = PaymentEvent.fromMap(map);
-          onChange(
-            legacyNames
-                ? PaymentEvent(
-                    eventName: legacyEventName(paymentEvent.eventName),
-                    payload: paymentEvent.payload,
-                  )
-                : paymentEvent,
-          );
+          onChange(paymentEvent);
         });
       }
 
@@ -441,9 +430,6 @@ class Elements {
   _onSessionUpdated;
   final Map<String, PaymentElementController> _paymentElementControllers = {};
   final Map<String, CvcWidgetController> _cvcWidgetControllers = {};
-  /* CVC widgets subscribed to `cvcStatusChange` only for the deprecated onCvcEvent; their CVC
-     status must not reach onChange, which the merchant did not subscribe. */
-  final Set<String> _cvcStatusForLegacyOnly = {};
   StreamSubscription? _eventSubscription;
   bool _updateIntentInProgress = false;
 
@@ -488,10 +474,6 @@ class Elements {
             controller.onChange?.call(
               PaymentEvent(eventName: type, payload: payload),
             );
-            // ignore: deprecated_member_use_from_same_package
-            controller.onPaymentEvent?.call(
-              PaymentEvent(eventName: legacyEventName(type), payload: payload),
-            );
         }
       } else if (_cvcWidgetControllers.containsKey(widgetId)) {
         final controller = _cvcWidgetControllers[widgetId]!;
@@ -503,16 +485,8 @@ class Elements {
         )) {
           return;
         }
-        if (!(type == SubscriptionEvent.cvcStatusChange.name &&
-            _cvcStatusForLegacyOnly.contains(widgetId))) {
-          controller.onChange?.call(
-            PaymentEvent(eventName: type, payload: payload),
-          );
-        }
-        // ignore: deprecated_member_use_from_same_package
-        controller.onCvcEvent?.call(
-          // ignore: deprecated_member_use_from_same_package
-          CvcWidgetEvent(type: legacyEventName(type), payload: payload),
+        controller.onChange?.call(
+          PaymentEvent(eventName: type, payload: payload),
         );
       }
     });
@@ -571,26 +545,7 @@ class Elements {
 
     await _ensureEventListener();
 
-    /* The deprecated onCvcEvent always received CVC status; keep that by subscribing on its
-       behalf. onChange alone is opt-in, so it only sees CVC status the merchant listed. */
-    const cvcStatus = SubscriptionEvent.cvcStatusChange;
-    final subscribeForLegacyOnly =
-        // ignore: deprecated_member_use_from_same_package
-        cvcWidgetController?.onCvcEvent != null &&
-        !(configuration?.subscribesTo(cvcStatus) ?? false);
-    if (subscribeForLegacyOnly) {
-      _cvcStatusForLegacyOnly.add(widgetId);
-    } else {
-      _cvcStatusForLegacyOnly.remove(widgetId);
-    }
-    final extraEvents = subscribeForLegacyOnly ? const [cvcStatus] : const <SubscriptionEvent>[];
-    final configurationJson = configuration != null
-        ? configuration.toJson(extraEvents: extraEvents)
-        : extraEvents.isEmpty
-        ? null
-        : <String, dynamic>{
-            'subscriptionEvents': extraEvents.map((e) => e.name).toList(),
-          };
+    final configurationJson = configuration?.toJson();
 
     final params = <String, dynamic>{
       'type': type,
@@ -736,7 +691,6 @@ class Elements {
       WidgetRegistry.unregister(widgetId);
       _paymentElementControllers.remove(widgetId);
       _cvcWidgetControllers.remove(widgetId);
-      _cvcStatusForLegacyOnly.remove(widgetId);
     } catch (error) {
       return Future.error(
         HyperswitchException(
@@ -790,6 +744,5 @@ class Elements {
     _eventSubscription = null;
     _paymentElementControllers.clear();
     _cvcWidgetControllers.clear();
-    _cvcStatusForLegacyOnly.clear();
   }
 }

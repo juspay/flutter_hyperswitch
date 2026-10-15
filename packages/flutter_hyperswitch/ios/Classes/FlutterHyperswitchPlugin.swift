@@ -152,7 +152,7 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
 
         registerCustomFonts(configuration: configuration)
 
-        // `subscriptionEvents` stays in the map; the SDK normalizes it for the bundle.
+        // `subscriptionEvents` passes through unchanged to client-core.
         let configMap = configuration ?? [:]
 
         // Re-create: drop any previous binding for this widgetId.

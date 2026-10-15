@@ -405,7 +405,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                         if (key != null && value != null) configMap[key.toString()] = value
                     }
                 }
-                // `subscriptionEvents` stays in the map; the SDK normalizes it for the bundle.
+                // `subscriptionEvents` passes through unchanged to client-core.
 
                 activity.runOnUiThread {
                     try {

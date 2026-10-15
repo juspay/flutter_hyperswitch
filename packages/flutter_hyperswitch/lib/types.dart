@@ -140,8 +140,6 @@ class Configuration {
   String? locale;
   /// Events delivered to `onChange`; nothing is emitted for events not listed.
   List<SubscriptionEvent>? subscriptionEvents;
-  @Deprecated('Use subscriptionEvents')
-  List<SubscriptionEvent>? subscribedEvents;
   RedirectionInfo? redirectionInfo;
   bool? alwaysSendCustomerAcceptance;
   bool? opensCardScannerAutomatically;
@@ -179,7 +177,6 @@ class Configuration {
     this.preloadCardElement,
     this.locale,
     this.subscriptionEvents,
-    @Deprecated('Use subscriptionEvents') this.subscribedEvents,
     this.redirectionInfo,
     this.alwaysSendCustomerAcceptance,
     this.opensCardScannerAutomatically,
@@ -195,21 +192,14 @@ class Configuration {
     this.hideConfirmButton,
   });
 
-  Set<SubscriptionEvent> get _allSubscriptionEvents => {
-    ...?subscriptionEvents,
-    // ignore: deprecated_member_use_from_same_package
-    ...?subscribedEvents,
-  };
+  Set<SubscriptionEvent> get _allSubscriptionEvents => {...?subscriptionEvents};
 
-  /// Whether [event] is listed in `subscriptionEvents` (or the deprecated `subscribedEvents`).
+  /// Whether [event] is listed in `subscriptionEvents`.
   bool subscribesTo(SubscriptionEvent event) =>
       _allSubscriptionEvents.contains(event);
 
-  /// [extraEvents] are subscribed on the merchant's behalf, on top of their own list.
-  Map<String, dynamic> toJson({
-    Iterable<SubscriptionEvent> extraEvents = const [],
-  }) {
-    final events = {..._allSubscriptionEvents, ...extraEvents};
+  Map<String, dynamic> toJson() {
+    final events = _allSubscriptionEvents;
     return {
       'appearance': appearance?.toJson(),
       'allowsDelayedPaymentMethods': allowsDelayedPaymentMethods,
@@ -1864,30 +1854,10 @@ class PaymentRequestData {
   }
 }
 
-/// Event emitted by [CvcWidgetController.onCvcEvent].
-@Deprecated('Use PaymentEvent with CvcWidget.onChange')
-class CvcWidgetEvent {
-  final String type;
-  final Map<String, dynamic> payload;
-
-  CvcWidgetEvent({required this.type, required this.payload});
-
-  factory CvcWidgetEvent.fromMap(Map<dynamic, dynamic> map) {
-    return CvcWidgetEvent(
-      type: map['type'] as String? ?? '',
-      payload: map['payload'] != null
-          ? Map<String, dynamic>.from(map['payload'] as Map)
-          : {},
-    );
-  }
-}
-
 /// Controls a PaymentElement widget after it has been created.
 class PaymentElementController {
   final String widgetId;
   final void Function(PaymentEvent)? onChange;
-  @Deprecated('Use onChange')
-  final void Function(PaymentEvent)? onPaymentEvent;
   final void Function(PaymentResult)? onPaymentResult;
   final Future<bool> Function(PaymentRequestData)? onPaymentConfirmButtonClick;
 
@@ -1899,7 +1869,6 @@ class PaymentElementController {
   PaymentElementController({
     required this.widgetId,
     this.onChange,
-    @Deprecated('Use onChange') this.onPaymentEvent,
     this.onPaymentResult,
     this.onPaymentConfirmButtonClick,
     this.onReady,
@@ -1912,9 +1881,6 @@ class PaymentElementController {
 class CvcWidgetController {
   final String widgetId;
   final void Function(PaymentEvent)? onChange;
-  @Deprecated('Use onChange')
-  // ignore: deprecated_member_use_from_same_package
-  final void Function(CvcWidgetEvent)? onCvcEvent;
 
   /// Lifecycle callbacks: need no subscription and never reach [onChange].
   final VoidCallback? onReady;
@@ -1924,7 +1890,6 @@ class CvcWidgetController {
   CvcWidgetController({
     required this.widgetId,
     this.onChange,
-    @Deprecated('Use onChange') this.onCvcEvent,
     this.onReady,
     this.onFocus,
     this.onBlur,
