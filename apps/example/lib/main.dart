@@ -258,25 +258,21 @@ Configuration _buildPaymentElementConfiguration() {
 
 /// One `onChange` receives every subscribed event; branch on its name.
 void _logPaymentEvent(String source, PaymentEvent event) {
-  switch (event.eventName) {
-    case 'paymentMethodChange':
+  switch (event.payload) {
+    case PaymentMethodChange payload:
       debugPrint(
-        "$source payment method: ${event.payload['paymentMethod']}/${event.payload['paymentMethodType']}",
+        '$source payment method: ${payload.paymentMethod}/${payload.paymentMethodType}',
       );
-    case 'cardDetailsChange':
+    case CardDetailsChange payload:
       debugPrint(
-        "$source card: brand=${event.payload['brand']} complete=${event.payload['isCardNumberComplete']}",
+        '$source card: brand=${payload.brand} complete=${payload.isCardNumberComplete}',
       );
-    case 'formStatusChange':
-      debugPrint("$source form status: ${event.payload['status']}");
-    case 'billingDetailsChange':
-      debugPrint(
-        "$source billing: ${event.payload['country']} ${event.payload['postalCode']}",
-      );
-    case 'cvcStatusChange':
-      debugPrint("$source cvc: ${event.payload}");
-    default:
-      debugPrint("$source ${event.eventName}: ${event.payload}");
+    case FormStatusChange payload:
+      debugPrint('$source form status: ${payload.status.wireValue}');
+    case BillingDetailsChange payload:
+      debugPrint('$source billing: ${payload.country} ${payload.postalCode}');
+    case CvcStatusChange payload:
+      debugPrint('$source cvc complete: ${payload.cvcStatus.isCvcComplete}');
   }
 }
 

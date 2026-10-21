@@ -555,7 +555,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                     val presentParams = buildPaymentSheetParams()
                     paymentSession?.presentPaymentSheet(
                         presentParams,
-                        onChange = { event -> emitEvent(event.eventName, event.payload) },
+                        onChange = { event -> emitEvent(event.eventName.value, event.payload.toMap()) },
                         resultCallback = ::onPaymentSheetResult,
                     ) ?: callBackHandler(result, defaultMap)
                 }
@@ -584,7 +584,7 @@ class FlutterHyperswitchPlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     // Change and lifecycle events travel as widget events typed by name; Dart routes the lifecycle ones.
     private fun forwardElementEvents(element: io.hyperswitch.view.HyperswitchElement, widgetId: String) {
         element.onChange(PaymentEventListener { event ->
-            emitWidgetEvent(widgetId, event.eventName, event.payload)
+            emitWidgetEvent(widgetId, event.eventName.value, event.payload.toMap())
         })
         element.onReady { emitWidgetEvent(widgetId, "ready", emptyMap<String, Any>()) }
         element.onFocus { emitWidgetEvent(widgetId, "focus", emptyMap<String, Any>()) }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show VoidCallback;
 import 'package:flutter/services.dart';
 import 'flutter_hyperswitch_platform_interface.dart';
 import 'src/widget_registry.dart';
@@ -356,8 +355,8 @@ class FlutterHyperswitch {
           final map = event as Map<dynamic, dynamic>;
           // Widget-scoped events carry a widgetId and belong to Elements.
           if (map['widgetId'] != null) return;
-          final paymentEvent = PaymentEvent.fromMap(map);
-          onChange(paymentEvent);
+          final paymentEvent = PaymentEvent.tryFromMap(map);
+          if (paymentEvent != null) onChange(paymentEvent);
         });
       }
 
@@ -444,8 +443,9 @@ class Elements {
       final widgetId = map['widgetId'] as String?;
       if (widgetId == null) return;
       final type = map['type'] as String? ?? '';
-      final payload = map['payload'] != null
-          ? Map<String, dynamic>.from(map['payload'] as Map)
+      final rawPayload = map['payload'];
+      final payload = rawPayload is Map && rawPayload.keys.every((key) => key is String)
+          ? Map<String, dynamic>.from(rawPayload)
           : <String, dynamic>{};
 
       if (_paymentElementControllers.containsKey(widgetId)) {
@@ -471,9 +471,11 @@ class Elements {
             )) {
               break;
             }
-            controller.onChange?.call(
-              PaymentEvent(eventName: type, payload: payload),
-            );
+            final paymentEvent = PaymentEvent.tryFromMap({
+              'eventName': type,
+              'payload': payload,
+            });
+            if (paymentEvent != null) controller.onChange?.call(paymentEvent);
         }
       } else if (_cvcWidgetControllers.containsKey(widgetId)) {
         final controller = _cvcWidgetControllers[widgetId]!;
@@ -485,9 +487,11 @@ class Elements {
         )) {
           return;
         }
-        controller.onChange?.call(
-          PaymentEvent(eventName: type, payload: payload),
-        );
+        final paymentEvent = PaymentEvent.tryFromMap({
+          'eventName': type,
+          'payload': payload,
+        });
+        if (paymentEvent != null) controller.onChange?.call(paymentEvent);
       }
     });
   }

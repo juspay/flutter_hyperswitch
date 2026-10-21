@@ -73,7 +73,7 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
     /// Change and lifecycle events travel as widget events typed by name; Dart routes the lifecycle ones.
     private func forwardElementEvents(_ element: ElementEventSource, _ widgetId: String) {
         element.onChange { [weak self] event in
-            self?.emitWidgetEvent(widgetId, event.eventName, event.payload)
+            self?.emitWidgetEvent(widgetId, event.eventName.rawValue, event.payload.toDictionary())
         }
         element.onReady { [weak self] in self?.emitWidgetEvent(widgetId, "ready", [:]) }
         element.onFocus { [weak self] in self?.emitWidgetEvent(widgetId, "focus", [:]) }
@@ -482,7 +482,7 @@ public class FlutterHyperswitchPlugin: NSObject, FlutterPlugin {
                 viewController: viewController,
                 params: configuration,
                 onChange: { [weak self] event in
-                    self?.emitSheetEvent(event.eventName, event.payload)
+                    self?.emitSheetEvent(event.eventName.rawValue, event.payload.toDictionary())
                 },
                 completion: { [weak self] paymentResult in
                     guard let self = self else { return }

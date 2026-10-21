@@ -1,3 +1,4 @@
+
 import 'dart:ui' show VoidCallback;
 
 
@@ -192,14 +193,11 @@ class Configuration {
     this.hideConfirmButton,
   });
 
-  Set<SubscriptionEvent> get _allSubscriptionEvents => {...?subscriptionEvents};
-
   /// Whether [event] is listed in `subscriptionEvents`.
   bool subscribesTo(SubscriptionEvent event) =>
-      _allSubscriptionEvents.contains(event);
+      subscriptionEvents?.contains(event) ?? false;
 
   Map<String, dynamic> toJson() {
-    final events = _allSubscriptionEvents;
     return {
       'appearance': appearance?.toJson(),
       'allowsDelayedPaymentMethods': allowsDelayedPaymentMethods,
@@ -223,8 +221,7 @@ class Configuration {
       'stickyPayButton': stickyPayButton,
       'preloadCardElement': preloadCardElement,
       'locale': locale,
-      'subscriptionEvents':
-          events.isEmpty ? null : events.map((e) => e.name).toList(),
+      'subscriptionEvents': subscriptionEvents?.map((e) => e.name).toList(),
       'redirectionInfo': redirectionInfo?.name,
       'alwaysSendCustomerAcceptance': alwaysSendCustomerAcceptance,
       'opensCardScannerAutomatically': opensCardScannerAutomatically,
@@ -1388,43 +1385,254 @@ class ApplePayParams {
   }
 }
 
-/// Events a merchant can list in [Configuration.subscriptionEvents]. The
-/// enum value's `name` is the wire name, which is also [PaymentEvent.eventName].
+/// Current event names accepted by subscriptionEvents and delivered to onChange.
 enum SubscriptionEvent {
   cardDetailsChange,
   paymentMethodChange,
   formStatusChange,
   billingDetailsChange,
-
-  /// Emitted by [CvcWidget].
   cvcStatusChange;
 
-  @Deprecated('Use cardDetailsChange')
-  static const paymentMethodInfoCard = cardDetailsChange;
-  @Deprecated('Use paymentMethodChange')
-  static const paymentMethodStatus = paymentMethodChange;
-  @Deprecated('Use formStatusChange')
-  static const formStatus = formStatusChange;
-  @Deprecated('Use billingDetailsChange')
-  static const paymentMethodInfoBillingAddress = billingDetailsChange;
-  @Deprecated('Use cvcStatusChange')
-  static const cvcStatus = cvcStatusChange;
+  static final _byName = values.asNameMap();
+  static SubscriptionEvent? fromName(String name) => _byName[name];
 }
 
-/// Delivered to `onChange`; switch on [eventName] (a [SubscriptionEvent] name).
-class PaymentEvent {
-  final String eventName;
-  final Map<String, dynamic> payload;
+enum FormStatusValue {
+  empty('EMPTY'),
+  filling('FILLING'),
+  complete('COMPLETE');
 
-  PaymentEvent({required this.eventName, Map<String, dynamic>? payload})
-    : payload = payload ?? <String, dynamic>{};
+  const FormStatusValue(this.wireValue);
+  final String wireValue;
+}
+
+/// Match on this sealed payload to access event-specific fields without casts.
+sealed class PaymentEventPayload {
+  const PaymentEventPayload();
+  Map<String, Object?> toJson();
+}
+
+final class CardDetailsChange extends PaymentEventPayload {
+  const CardDetailsChange({
+    required this.bin,
+    required this.extendedBin,
+    required this.last4,
+    required this.brand,
+    required this.expiryMonth,
+    required this.expiryYear,
+    required this.formattedExpiry,
+    required this.isCardNumberComplete,
+    required this.isCardNumberValid,
+    required this.isExpiryComplete,
+    required this.isExpiryValid,
+    required this.isCvcComplete,
+  });
+
+  final String? bin;
+  final String? extendedBin;
+  final String? last4;
+  final String? brand;
+  final String? expiryMonth;
+  final String? expiryYear;
+  final String? formattedExpiry;
+  final bool isCardNumberComplete;
+  final bool isCardNumberValid;
+  final bool isExpiryComplete;
+  final bool isExpiryValid;
+  final bool isCvcComplete;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'bin': bin,
+    'extendedBin': extendedBin,
+    'last4': last4,
+    'brand': brand,
+    'expiryMonth': expiryMonth,
+    'expiryYear': expiryYear,
+    'formattedExpiry': formattedExpiry,
+    'isCardNumberComplete': isCardNumberComplete,
+    'isCardNumberValid': isCardNumberValid,
+    'isExpiryComplete': isExpiryComplete,
+    'isExpiryValid': isExpiryValid,
+    'isCvcComplete': isCvcComplete,
+  };
+}
+
+final class PaymentMethodChange extends PaymentEventPayload {
+  const PaymentMethodChange({
+    required this.paymentMethod,
+    required this.paymentMethodType,
+    required this.isSavedPaymentMethod,
+    required this.isOneClickWallet,
+  });
+
+  final String paymentMethod;
+  final String paymentMethodType;
+  final bool isSavedPaymentMethod;
+  final bool isOneClickWallet;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'paymentMethod': paymentMethod,
+    'paymentMethodType': paymentMethodType,
+    'isSavedPaymentMethod': isSavedPaymentMethod,
+    'isOneClickWallet': isOneClickWallet,
+  };
+}
+
+final class FormStatusChange extends PaymentEventPayload {
+  const FormStatusChange({required this.status});
+
+  final FormStatusValue status;
+
+  @override
+  Map<String, Object?> toJson() => {'status': status.wireValue};
+}
+
+final class BillingDetailsChange extends PaymentEventPayload {
+  const BillingDetailsChange({
+    required this.country,
+    required this.state,
+    required this.postalCode,
+  });
+
+  final String? country;
+  final String? state;
+  final String? postalCode;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'country': country,
+    'state': state,
+    'postalCode': postalCode,
+  };
+}
+
+final class CvcStatusChange extends PaymentEventPayload {
+  const CvcStatusChange({required this.cvcStatus});
+
+  final CvcStatus cvcStatus;
+
+  @override
+  Map<String, Object?> toJson() => {'cvcStatus': cvcStatus.toJson()};
+}
+
+final class CvcStatus {
+  const CvcStatus({required this.isCvcEmpty, required this.isCvcComplete});
+  final bool isCvcEmpty;
+  final bool isCvcComplete;
+
+  Map<String, Object?> toJson() => {
+    'isCvcEmpty': isCvcEmpty,
+    'isCvcComplete': isCvcComplete,
+  };
+}
+
+/// The name is derived from the payload, so mismatched events cannot be constructed.
+final class PaymentEvent {
+  const PaymentEvent({required this.payload});
+  final PaymentEventPayload payload;
+  SubscriptionEvent get eventName => switch (payload) {
+    CardDetailsChange() => SubscriptionEvent.cardDetailsChange,
+    PaymentMethodChange() => SubscriptionEvent.paymentMethodChange,
+    FormStatusChange() => SubscriptionEvent.formStatusChange,
+    BillingDetailsChange() => SubscriptionEvent.billingDetailsChange,
+    CvcStatusChange() => SubscriptionEvent.cvcStatusChange,
+  };
 
   factory PaymentEvent.fromMap(Map<dynamic, dynamic> map) {
-    return PaymentEvent(
-      eventName: map['eventName'] as String? ?? '',
-      payload: map['payload'] != null
-          ? Map<String, dynamic>.from(map['payload'] as Map)
-          : null,
+    final event = tryFromMap(map);
+    if (event == null) throw const FormatException('Invalid payment event');
+    return event;
+  }
+
+  /// Invalid or unsupported bridge events never reach merchant callbacks.
+  static PaymentEvent? tryFromMap(Map<dynamic, dynamic> map) {
+    final name = map['eventName'];
+    final rawPayload = map['payload'];
+    if (name is! String || rawPayload is! Map) return null;
+    final type = SubscriptionEvent.fromName(name);
+    if (type == null) return null;
+    final reader = _PayloadReader(rawPayload);
+    try {
+      final PaymentEventPayload payload = switch (type) {
+        SubscriptionEvent.cardDetailsChange => CardDetailsChange(
+          bin: reader.nullableString('bin'),
+          extendedBin: reader.nullableString('extendedBin'),
+          last4: reader.nullableString('last4'),
+          brand: reader.nullableString('brand'),
+          expiryMonth: reader.nullableString('expiryMonth'),
+          expiryYear: reader.nullableString('expiryYear'),
+          formattedExpiry: reader.nullableString('formattedExpiry'),
+          isCardNumberComplete: reader.boolean('isCardNumberComplete'),
+          isCardNumberValid: reader.boolean('isCardNumberValid'),
+          isExpiryComplete: reader.boolean('isExpiryComplete'),
+          isExpiryValid: reader.boolean('isExpiryValid'),
+          isCvcComplete: reader.boolean('isCvcComplete'),
+        ),
+        SubscriptionEvent.paymentMethodChange => PaymentMethodChange(
+          paymentMethod: reader.string('paymentMethod'),
+          paymentMethodType: reader.string('paymentMethodType'),
+          isSavedPaymentMethod: reader.boolean('isSavedPaymentMethod'),
+          isOneClickWallet: reader.boolean('isOneClickWallet'),
+        ),
+        SubscriptionEvent.formStatusChange => FormStatusChange(
+          status: reader.formStatus(),
+        ),
+        SubscriptionEvent.billingDetailsChange => BillingDetailsChange(
+          country: reader.nullableString('country'),
+          state: reader.nullableString('state'),
+          postalCode: reader.nullableString('postalCode'),
+        ),
+        SubscriptionEvent.cvcStatusChange => CvcStatusChange(
+          cvcStatus: reader.cvcStatus(),
+        ),
+      };
+      return PaymentEvent(payload: payload);
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+class _PayloadReader {
+  const _PayloadReader(this.values);
+  final Map<dynamic, dynamic> values;
+
+  String? nullableString(String key) {
+    final value = values[key];
+    if (!values.containsKey(key) || (value != null && value is! String)) {
+      throw const FormatException('Invalid nullable string');
+    }
+    return value as String?;
+  }
+
+  String string(String key) {
+    final value = values[key];
+    if (value is! String) throw const FormatException('Invalid string');
+    return value;
+  }
+
+  bool boolean(String key) {
+    final value = values[key];
+    if (value is! bool) throw const FormatException('Invalid boolean');
+    return value;
+  }
+
+  FormStatusValue formStatus() => switch (string('status')) {
+    'EMPTY' => FormStatusValue.empty,
+    'FILLING' => FormStatusValue.filling,
+    'COMPLETE' => FormStatusValue.complete,
+    _ => throw const FormatException('Invalid form status'),
+  };
+
+  CvcStatus cvcStatus() {
+    final value = values['cvcStatus'];
+    if (value is! Map) throw const FormatException('Invalid CVC status');
+    final reader = _PayloadReader(value);
+    return CvcStatus(
+      isCvcEmpty: reader.boolean('isCvcEmpty'),
+      isCvcComplete: reader.boolean('isCvcComplete'),
     );
   }
 }

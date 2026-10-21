@@ -52,6 +52,31 @@ Present the payment sheet within your app:
 
 <pre><div class="bg-black rounded-md"><div class="flex items-center relative text-gray-200 bg-gray-800 dark:bg-token-surface-primary px-4 py-2 text-xs font-sans justify-between rounded-t-md"><span>dart</span></div><div class="p-4 overflow-y-auto"><code class="!whitespace-pre hljs language-dart">Map&lt;String, dynamic&gt;? result = await _hyper.presentPaymentSheet();</code></div></div></pre>
 
+## Typed payment events
+
+Set `Configuration(subscriptionEvents: [...])` and handle events with `onChange`.
+`event.payload` is a sealed `PaymentEventPayload`; its variant determines `event.eventName`.
+Payload model names match the event names and contain only the event's data fields.
+Pattern-match to access typed fields without map lookups:
+
+```dart
+void onChange(PaymentEvent event) {
+  switch (event.payload) {
+    case PaymentMethodChange payload:
+      final bool saved = payload.isSavedPaymentMethod;
+      final String method = payload.paymentMethod;
+    case CardDetailsChange payload:
+      final String? bin = payload.bin;
+    default:
+      break;
+  }
+}
+```
+
+Form status uses `FormStatusValue`, nullable metadata remains null, and CVC flags live under
+`CvcStatusChange.cvcStatus`. Lifecycle events have separate callbacks. Invalid bridge payloads
+are ignored.
+
 ## Configuration
 
 You'll need to configure your backend and obtain necessary keys/secrets for successful payment processing. Please refer to our documentation [Node SDK Reference](https://docs.hyperswitch.io/learn-more/sdk-reference/node) for detailed setup instructions.
