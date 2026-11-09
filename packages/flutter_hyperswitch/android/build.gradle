@@ -58,7 +58,7 @@ android {
     }
 
     dependencies {
-        implementation "io.hyperswitch:hyperswitch-sdk-android:1.3.0-patch.2"
+        implementation "io.hyperswitch:hyperswitch-sdk-android:1.3.0-patch.3"
     }
 
     testOptions {
@@ -73,3 +73,10 @@ android {
         }
     }
 }
+
+def appProject = rootProject.allprojects.find { it.plugins.hasPlugin('com.android.application') }
+try {
+    appProject.android.buildTypes.debug.manifestPlaceholders += [applicationName: "io.hyperswitch.react.MainApplication"]
+    appProject.android.buildTypes.profile.manifestPlaceholders += [applicationName: "io.hyperswitch.react.MainApplication"]
+    appProject.android.buildTypes.release.manifestPlaceholders += [applicationName: "io.hyperswitch.react.MainApplication"]
+} catch (ignored) {}

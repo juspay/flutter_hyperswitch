@@ -55,6 +55,7 @@ class _MyAppState extends State<MyApp> {
               paymentSheetHeaderLabel: "Payment methods",
               savedPaymentSheetHeaderLabel: "Select payment method",
               primaryButtonLabel: "Purchase (\$2.00)",
+              disableBranding: true,
               appearance: Appearance(
                 layout: Layout.tabs,
                 googlePay: GPayParams(
