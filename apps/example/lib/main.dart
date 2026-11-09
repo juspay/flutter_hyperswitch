@@ -40,7 +40,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _initPlatformState() async {
-    final response = await http.get(
+    final response = await http.post(
       Uri.parse("$_endpoint/create-payment-intent"),
     );
     if (response.statusCode == 200) {
@@ -89,7 +89,8 @@ class _MyAppState extends State<MyApp> {
         );
       } catch (ex) {
         setState(() {
-          _statusText = (ex as HyperswitchException).message;
+          _statusText =
+              (ex is HyperswitchException ? ex.message : null) ?? ex.toString();
         });
       }
       setState(() {

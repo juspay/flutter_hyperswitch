@@ -1,3 +1,7 @@
+## 1.5.2-patch.4
+
+* Patch for fixes.
+
 ## 1.5.2-patch.3
 
 * Revert to MainApplication initialization.

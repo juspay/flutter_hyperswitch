@@ -9,7 +9,7 @@ const hyper = require("@juspay-tech/hyperswitch-node")(
   process.env.HYPERSWITCH_SECRET_KEY
 );
 
-app.get("/create-payment-intent", async (req, res) => {
+app.post("/create-payment-intent", async (req, res) => {
   try {
     var paymentIntent = await hyper.paymentIntents.create({
       amount: 2999,
